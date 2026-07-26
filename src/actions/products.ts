@@ -49,12 +49,14 @@ const createProductSchema = z.object({
   materials: z.array(materialSchema).default([]),
   gemstones: z.array(gemstoneSchema).default([]),
   /**
-   * Pièces identiques reçues en série (ex. 12 alliances du même fournisseur,
+   * Pièces identiques reçues en série (ex. 200 alliances du même fournisseur,
    * même métal/titre/poids). Chacune reste une ligne `products` à part
    * entière — sa propre RFID, son propre prix calculé, sa propre traçabilité
-   * de vente — seule la saisie est mutualisée.
+   * de vente — seule la saisie est mutualisée. Pas de plafond métier : la
+   * borne haute n'est là que pour absorber une frappe accidentelle
+   * (ex. un zéro de trop), pas pour limiter un vrai réassort.
    */
-  quantity: z.number().int().min(1).max(50).default(1),
+  quantity: z.number().int().min(1).max(10_000).default(1),
 });
 
 /** `MP-BAG-0500` × 3 → `MP-BAG-0500-1`, `-2`, `-3` (largeur = celle du total). */

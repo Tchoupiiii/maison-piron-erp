@@ -165,7 +165,7 @@ export default async function InventairePage({
                   name="quantity"
                   type="number"
                   min="1"
-                  max="50"
+                  max="10000"
                   step="1"
                   defaultValue="1"
                   className={inputClass}
