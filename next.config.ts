@@ -12,6 +12,22 @@ const nextConfig: NextConfig = {
       bodySizeLimit: "16mb",
     },
   },
+
+  async headers() {
+    return [
+      {
+        // Sans ça, /auth/login s'intègre dans une iframe tierce : un habillage
+        // par-dessus le formulaire suffirait à récupérer un mot de passe saisi
+        // en toute confiance (clickjacking).
+        source: "/:path*",
+        headers: [
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

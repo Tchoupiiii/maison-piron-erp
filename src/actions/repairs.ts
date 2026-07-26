@@ -167,23 +167,50 @@ export async function updateRepairStatus(
   }
 }
 
+const REPAIR_PHOTO_MAX_BYTES = 15 * 1024 * 1024;
+
+/**
+ * Le nom de fichier et le Content-Type annoncés par le navigateur n'engagent
+ * personne : seuls les premiers octets disent ce qu'est vraiment le fichier
+ * (même raisonnement que pour le certificat de pierre, voir products.ts).
+ */
+async function sniffImageFormat(
+  file: File,
+): Promise<{ mime: string; extension: string } | null> {
+  const head = new Uint8Array(await file.slice(0, 12).arrayBuffer());
+  if ([0xff, 0xd8, 0xff].every((byte, i) => head[i] === byte)) {
+    return { mime: "image/jpeg", extension: "jpg" };
+  }
+  if ([0x89, 0x50, 0x4e, 0x47].every((byte, i) => head[i] === byte)) {
+    return { mime: "image/png", extension: "png" };
+  }
+  // WEBP : conteneur RIFF, la signature du format est à l'octet 8, pas au début.
+  const isRiff = [0x52, 0x49, 0x46, 0x46].every((byte, i) => head[i] === byte);
+  const isWebp = [0x57, 0x45, 0x42, 0x50].every((byte, i) => head[8 + i] === byte);
+  if (isRiff && isWebp) return { mime: "image/webp", extension: "webp" };
+  return null;
+}
+
 export async function uploadRepairPhoto(
   ticketId: string,
   phase: "avant" | "apres",
   file: File,
 ): Promise<ActionResult<{ path: string }>> {
+  if (file.size === 0) return { ok: false, error: "Choisissez un fichier" };
+  if (file.size > REPAIR_PHOTO_MAX_BYTES) {
+    return { ok: false, error: "Fichier trop lourd (15 Mo maximum)" };
+  }
+
+  const format = await sniffImageFormat(file);
+  if (!format) return { ok: false, error: "Format d'image non accepté" };
+
   try {
     const session = await requirePermission(PERMISSIONS.atelierCreer);
 
-    const extension = file.name.split(".").pop()?.toLowerCase() ?? "jpg";
-    if (!["jpg", "jpeg", "png", "webp"].includes(extension)) {
-      return { ok: false, error: "Format d'image non accepté" };
-    }
-
-    const path = `${ticketId}/${phase}/${crypto.randomUUID()}.${extension}`;
+    const path = `${ticketId}/${phase}/${crypto.randomUUID()}.${format.extension}`;
     const { error: uploadError } = await session.supabase.storage
       .from("repair_media")
-      .upload(path, file, { contentType: file.type });
+      .upload(path, file, { contentType: format.mime });
 
     if (uploadError) return { ok: false, error: uploadError.message };
 
