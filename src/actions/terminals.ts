@@ -63,7 +63,6 @@ export async function createTerminal(
     });
 
     revalidatePath("/reglages");
-    revalidatePath("/pos");
     return { ok: true, data: { id: data.id } };
   } catch (error) {
     return { ok: false, error: actionError(error) };
@@ -131,7 +130,6 @@ export async function updateTerminal(
     });
 
     revalidatePath("/reglages");
-    revalidatePath("/pos");
     return { ok: true, data: { id: terminalId } };
   } catch (error) {
     return { ok: false, error: actionError(error) };

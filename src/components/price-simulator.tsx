@@ -3,12 +3,20 @@
 import { useMemo, useState } from "react";
 import { calculatePrice, ratePerGramForPurity } from "@/lib/pricing/engine";
 import { formatEUR } from "@/lib/constants";
-import { labelClass } from "@/components/ui";
+import { inputClass, labelClass } from "@/components/ui";
 import type { Database } from "@/types/database.types";
 
 type MetalKind = Database["public"]["Enums"]["metal_kind"];
 
 type Title = { metal_kind: MetalKind; purity_per_mille: number; label: string };
+
+type SimGemstone = {
+  id: string;
+  name: string;
+  caratWeight: number;
+  stoneCount: number;
+  pricePerCarat: number;
+};
 
 /**
  * Aperçu interactif seulement : le prix persisté vient toujours de la RPC SQL.
@@ -18,6 +26,7 @@ export function PriceSimulator({
   titles,
   rates,
   initial,
+  initialGemstones,
 }: {
   titles: Title[];
   rates: Partial<Record<MetalKind, number>>;
@@ -25,35 +34,40 @@ export function PriceSimulator({
     metalKind: MetalKind;
     purityPerMille: number;
     weightGrams: number;
-    stoneCost: number;
     laborCostEur: number;
     marginMultiplier: number;
   };
+  initialGemstones: SimGemstone[];
 }) {
   const [metalKind, setMetalKind] = useState<MetalKind>(initial.metalKind);
   const [purity, setPurity] = useState(initial.purityPerMille);
   const [weight, setWeight] = useState(initial.weightGrams);
   const [labor, setLabor] = useState(initial.laborCostEur);
   const [margin, setMargin] = useState(initial.marginMultiplier);
+  const [gemstones, setGemstones] = useState<SimGemstone[]>(initialGemstones);
 
   const availableTitles = titles.filter((t) => t.metal_kind === metalKind);
   const rate = rates[metalKind];
+
+  function patchGemstone(id: string, patch: Partial<SimGemstone>) {
+    setGemstones((prev) => prev.map((g) => (g.id === id ? { ...g, ...patch } : g)));
+  }
 
   const breakdown = useMemo(
     () =>
       calculatePrice({
         materials: [{ metal_kind: metalKind, purity_per_mille: purity, weight_grams: weight }],
-        gemstones: [],
+        gemstones: gemstones.map((g) => ({
+          carat_weight: g.caratWeight,
+          stone_count: g.stoneCount,
+          price_per_carat: g.pricePerCarat,
+        })),
         laborCostEur: labor,
         marginMultiplier: margin,
         ratesPerGramFine: rates as Record<string, number>,
       }),
-    [metalKind, purity, weight, labor, margin, rates],
+    [metalKind, purity, weight, labor, margin, gemstones, rates],
   );
-
-  // les pierres sont figées : leur prix au carat ne dépend pas des curseurs
-  const ht = Math.round((breakdown.metalCost + initial.stoneCost + labor) * margin * 100) / 100;
-  const ttc = Math.round(ht * 1.21 * 100) / 100;
 
   return (
     <div className="flex flex-col gap-4 p-5">
@@ -131,6 +145,53 @@ export function PriceSimulator({
         </label>
       </div>
 
+      {gemstones.length > 0 && (
+        <div className="flex flex-col gap-3 border-t border-hairline pt-4">
+          <span className={labelClass}>Pierres (simulation locale)</span>
+          {gemstones.map((g) => (
+            <div
+              key={g.id}
+              className="grid grid-cols-[1fr_repeat(3,minmax(90px,110px))] items-end gap-3"
+            >
+              <span className="pb-2 text-body">{g.name}</span>
+              <label className="flex flex-col gap-1">
+                <span className={labelClass}>Poids (ct)</span>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.001"
+                  value={g.caratWeight}
+                  onChange={(e) => patchGemstone(g.id, { caratWeight: Number(e.target.value) })}
+                  className={inputClass}
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className={labelClass}>Nombre</span>
+                <input
+                  type="number"
+                  min={0}
+                  step="1"
+                  value={g.stoneCount}
+                  onChange={(e) => patchGemstone(g.id, { stoneCount: Number(e.target.value) })}
+                  className={inputClass}
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className={labelClass}>Prix / ct (€)</span>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={g.pricePerCarat}
+                  onChange={(e) => patchGemstone(g.id, { pricePerCarat: Number(e.target.value) })}
+                  className={inputClass}
+                />
+              </label>
+            </div>
+          ))}
+        </div>
+      )}
+
       <dl className="grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-4 border-t border-hairline pt-4">
         <div className="flex flex-col gap-1">
           <dt className={labelClass}>Cours appliqué</dt>
@@ -144,15 +205,15 @@ export function PriceSimulator({
         </div>
         <div className="flex flex-col gap-1">
           <dt className={labelClass}>Pierres</dt>
-          <dd className="tabular text-body">{formatEUR(initial.stoneCost)}</dd>
+          <dd className="tabular text-body">{formatEUR(breakdown.stoneCost)}</dd>
         </div>
         <div className="flex flex-col gap-1">
           <dt className={labelClass}>HT</dt>
-          <dd className="tabular text-body">{formatEUR(ht)}</dd>
+          <dd className="tabular text-body">{formatEUR(breakdown.ht)}</dd>
         </div>
         <div className="flex flex-col gap-1">
           <dt className={labelClass}>TTC simulé</dt>
-          <dd className="tabular text-heading-sm font-medium">{formatEUR(ttc)}</dd>
+          <dd className="tabular text-heading-sm font-medium">{formatEUR(breakdown.ttc)}</dd>
         </div>
       </dl>
 

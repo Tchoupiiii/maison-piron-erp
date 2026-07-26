@@ -47,8 +47,11 @@ export function MetalChart({
   const [purity, setPurity] = useState(999);
 
   useEffect(() => {
+    // setState synchrone voulu : localStorage n'est lisible qu'après montage
+    // (le rendu serveur doit rester sur le titre par défaut).
     const stored = Number(localStorage.getItem(storageKey(metalKind)));
     if (stored && titles.some((t) => t.purity_per_mille === stored)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPurity(stored);
     }
     // Un seul métal par instance : pas besoin de re-suivre metalKind/titles.

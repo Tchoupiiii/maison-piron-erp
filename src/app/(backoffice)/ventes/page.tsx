@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getStaffSession } from "@/actions/auth-guard";
 import { getMaison } from "@/lib/maison";
+import { AccessRestricted } from "@/components/access-restricted";
 import {
   Badge,
   Card,
@@ -27,6 +28,15 @@ export default async function VentesPage({
   const { statut } = await searchParams;
   const [session, maison] = await Promise.all([getStaffSession(), getMaison()]);
   if (!session) return null;
+  if (!session.can(PERMISSIONS.ventesVoir)) {
+    return (
+      <AccessRestricted
+        breadcrumb={[maison.displayName, "Boutique", "Ventes"]}
+        title="Ventes & factures"
+        permissionLabel="Consulter les ventes"
+      />
+    );
+  }
 
   let query = session.supabase
     .from("transactions")
@@ -48,6 +58,8 @@ export default async function VentesPage({
   );
 
   const canSell = session.can(PERMISSIONS.ventesCreer);
+  // La caisse est une application séparée : sans URL configurée, pas de bouton.
+  const posUrl = process.env.NEXT_PUBLIC_POS_URL;
 
   return (
     <>
@@ -55,10 +67,10 @@ export default async function VentesPage({
         breadcrumb={[maison.displayName, "Boutique", "Ventes"]}
         title="Ventes & factures"
         aside={
-          canSell ? (
-            <Link href="/pos" className={buttonPrimary}>
-              Encaisser une vente
-            </Link>
+          canSell && posUrl ? (
+            <a href={posUrl} target="_blank" rel="noreferrer" className={buttonPrimary}>
+              Encaisser une vente ↗
+            </a>
           ) : undefined
         }
       />

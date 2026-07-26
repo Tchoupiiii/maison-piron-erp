@@ -5,6 +5,8 @@ import { PrintButton } from "@/components/print-button";
 import { buttonGhost } from "@/components/ui";
 import { CERTIFICATE_LAB_LABELS, GEMSTONE_TYPE_LABELS } from "@/lib/constants";
 import { getMaison } from "@/lib/maison";
+import { PERMISSIONS } from "@/lib/permissions";
+import { AccessRestricted } from "@/components/access-restricted";
 
 /**
  * Document Maison Piron distinct du scan de labo : une mise en forme soignée
@@ -19,6 +21,15 @@ export default async function GemstoneCertificatePage({
   const { productId, gemstoneId } = await params;
   const [session, maison] = await Promise.all([getStaffSession(), getMaison()]);
   if (!session) return null;
+  if (!session.can(PERMISSIONS.inventaireVoir)) {
+    return (
+      <AccessRestricted
+        breadcrumb={[maison.displayName, "Boutique", "Inventaire"]}
+        title="Certificat"
+        permissionLabel="Consulter l'inventaire"
+      />
+    );
+  }
 
   const { data: gemstone } = await session.supabase
     .from("product_gemstones")

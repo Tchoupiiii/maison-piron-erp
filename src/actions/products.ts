@@ -7,6 +7,8 @@ import { diffOf, logActivity } from "@/actions/activity";
 import { PERMISSIONS } from "@/lib/permissions";
 import { PRODUCT_STATUS_LABELS } from "@/lib/constants";
 import { actionError, type ActionResult } from "@/actions/types";
+import { computeAndPersist } from "@/lib/pricing/persist";
+import type { StaffSession } from "@/actions/auth-guard";
 import type { Database } from "@/types/database.types";
 
 type ProductStatus = Database["public"]["Enums"]["product_status"];
@@ -236,6 +238,201 @@ export async function replaceProductMaterials(
 
     revalidatePath(`/inventaire/${productId}`);
     return { ok: true, data: { count: parsed.data.length } };
+  } catch (error) {
+    return { ok: false, error: actionError(error) };
+  }
+}
+
+/**
+ * Après toute écriture sur les pierres, l'étiquette doit suivre — mais le
+ * recalcul exige `inventaire.prix`. Sans ce droit, la pierre est bien
+ * enregistrée et l'UI invite à faire recalculer le prix.
+ */
+async function recalcIfAllowed(session: StaffSession, productId: string): Promise<boolean> {
+  if (!session.can(PERMISSIONS.inventairePrix)) return false;
+  await computeAndPersist(session, productId, "edition_manuelle");
+  return true;
+}
+
+export async function addGemstone(
+  productId: string,
+  input: z.input<typeof gemstoneSchema>,
+): Promise<ActionResult<{ id: string; priceRecalculated: boolean }>> {
+  if (!z.string().uuid().safeParse(productId).success) {
+    return { ok: false, error: "Pièce introuvable" };
+  }
+  const parsed = gemstoneSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: "Pierre incomplète",
+      fieldErrors: z.flattenError(parsed.error).fieldErrors as Record<string, string[]>,
+    };
+  }
+
+  try {
+    const session = await requirePermission(PERMISSIONS.inventaireModifier);
+    const g = parsed.data;
+
+    const { data: gemstone, error } = await session.supabase
+      .from("product_gemstones")
+      .insert({
+        product_id: productId,
+        name: g.name,
+        gemstone_type: g.gemstoneType,
+        carat_weight: g.caratWeight,
+        stone_count: g.stoneCount,
+        price_per_carat: g.pricePerCarat,
+        clarity: g.clarity ?? null,
+        color: g.color ?? null,
+        cut: g.cut ?? null,
+        certificate_lab: g.certificateLab,
+        certificate_number: g.certificateNumber ?? null,
+      })
+      .select("id")
+      .single();
+
+    if (error) return { ok: false, error: error.message };
+
+    const priceRecalculated = await recalcIfAllowed(session, productId);
+
+    await logActivity(session, {
+      action: "produit_modifie",
+      summary: `Pierre ajoutée : ${g.name} (${g.stoneCount} × ${g.caratWeight} ct)`,
+      entityType: "product",
+      entityId: productId,
+    });
+
+    revalidatePath(`/inventaire/${productId}`);
+    revalidatePath("/inventaire");
+    return { ok: true, data: { id: gemstone.id, priceRecalculated } };
+  } catch (error) {
+    return { ok: false, error: actionError(error) };
+  }
+}
+
+export async function updateGemstone(
+  productId: string,
+  gemstoneId: string,
+  input: z.input<typeof gemstoneSchema>,
+): Promise<ActionResult<{ id: string; priceRecalculated: boolean }>> {
+  const target = certificateTargetSchema.safeParse({ productId, gemstoneId });
+  if (!target.success) return { ok: false, error: "Pierre introuvable" };
+  const parsed = gemstoneSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: "Pierre incomplète",
+      fieldErrors: z.flattenError(parsed.error).fieldErrors as Record<string, string[]>,
+    };
+  }
+
+  try {
+    const session = await requirePermission(PERMISSIONS.inventaireModifier);
+    const g = parsed.data;
+
+    // Jamais de delete+insert : l'id doit survivre, les certificats scannés
+    // (`product_media.gemstone_id`, on delete cascade) en dépendent.
+    const { data: updated, error } = await session.supabase
+      .from("product_gemstones")
+      .update({
+        name: g.name,
+        gemstone_type: g.gemstoneType,
+        carat_weight: g.caratWeight,
+        stone_count: g.stoneCount,
+        price_per_carat: g.pricePerCarat,
+        clarity: g.clarity ?? null,
+        color: g.color ?? null,
+        cut: g.cut ?? null,
+        certificate_lab: g.certificateLab,
+        certificate_number: g.certificateNumber ?? null,
+      })
+      .eq("id", gemstoneId)
+      .eq("product_id", productId)
+      .select("id")
+      .maybeSingle();
+
+    if (error) return { ok: false, error: error.message };
+    if (!updated) return { ok: false, error: "Pierre introuvable" };
+
+    const priceRecalculated = await recalcIfAllowed(session, productId);
+
+    await logActivity(session, {
+      action: "produit_modifie",
+      summary: `Pierre modifiée : ${g.name} (${g.stoneCount} × ${g.caratWeight} ct)`,
+      entityType: "product",
+      entityId: productId,
+    });
+
+    revalidatePath(`/inventaire/${productId}`);
+    revalidatePath("/inventaire");
+    return { ok: true, data: { id: gemstoneId, priceRecalculated } };
+  } catch (error) {
+    return { ok: false, error: actionError(error) };
+  }
+}
+
+export async function removeGemstone(
+  productId: string,
+  gemstoneId: string,
+): Promise<ActionResult<{ id: string; priceRecalculated: boolean }>> {
+  const target = certificateTargetSchema.safeParse({ productId, gemstoneId });
+  if (!target.success) return { ok: false, error: "Pierre introuvable" };
+
+  try {
+    const session = await requirePermission(PERMISSIONS.inventaireModifier);
+
+    const { data: gemstone } = await session.supabase
+      .from("product_gemstones")
+      .select("id, name")
+      .eq("id", gemstoneId)
+      .eq("product_id", productId)
+      .maybeSingle();
+    if (!gemstone) return { ok: false, error: "Pierre introuvable" };
+
+    // Les scans de certificats partent en premier (même règle que
+    // deleteGemstoneCertificate) : la cascade SQL supprimerait les lignes
+    // media mais laisserait les fichiers orphelins dans le bucket.
+    const { data: mediaRows } = await session.supabase
+      .from("product_media")
+      .select("storage_path")
+      .eq("gemstone_id", gemstoneId)
+      .eq("media_type", "certificat");
+
+    const paths = (mediaRows ?? []).map((m) => m.storage_path);
+    if (paths.length > 0) {
+      const { data: removed, error: storageError } = await session.supabase.storage
+        .from("produit_media")
+        .remove(paths);
+      if (storageError || !removed || removed.length !== paths.length) {
+        return {
+          ok: false,
+          error: `Certificat(s) scanné(s) non supprimés du stockage${
+            storageError ? ` : ${storageError.message}` : " — droits insuffisants (inventaire.supprimer requis)"
+          }. La pierre n'a pas été retirée.`,
+        };
+      }
+    }
+
+    const { error: deleteError } = await session.supabase
+      .from("product_gemstones")
+      .delete()
+      .eq("id", gemstoneId)
+      .eq("product_id", productId);
+    if (deleteError) return { ok: false, error: deleteError.message };
+
+    const priceRecalculated = await recalcIfAllowed(session, productId);
+
+    await logActivity(session, {
+      action: "produit_modifie",
+      summary: `Pierre retirée : ${gemstone.name}${paths.length > 0 ? ` (+ ${paths.length} certificat(s) scanné(s))` : ""}`,
+      entityType: "product",
+      entityId: productId,
+    });
+
+    revalidatePath(`/inventaire/${productId}`);
+    revalidatePath("/inventaire");
+    return { ok: true, data: { id: gemstoneId, priceRecalculated } };
   } catch (error) {
     return { ok: false, error: actionError(error) };
   }

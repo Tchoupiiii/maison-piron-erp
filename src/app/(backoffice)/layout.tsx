@@ -46,7 +46,11 @@ export default async function BackofficeLayout({
   const permissions = new Set<string>(permissionKeys ?? []);
 
   const navItems = NAV_ITEMS.filter(
-    (item) => item.permission === null || permissions.has(item.permission),
+    (item) =>
+      // href vide = destination non configurée (cas de l'app POS externe).
+      item.href !== "" &&
+      (item.permission === null ||
+        [item.permission].flat().some((p) => permissions.has(p))),
   ).map(({ href, label }) => ({ href, label }));
 
   const { data: goldRate } = await supabase

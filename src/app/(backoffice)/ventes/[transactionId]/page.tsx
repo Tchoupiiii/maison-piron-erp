@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getStaffSession } from "@/actions/auth-guard";
 import { getMaison } from "@/lib/maison";
+import { AccessRestricted } from "@/components/access-restricted";
 import { emitInvoice, recordPayment, returnSoldItem } from "@/actions/transactions";
 import { ActionButton } from "@/components/action-button";
 import { ActionForm } from "@/components/action-form";
@@ -34,6 +35,15 @@ export default async function SalePage({
   const { transactionId } = await params;
   const [session, maison] = await Promise.all([getStaffSession(), getMaison()]);
   if (!session) return null;
+  if (!session.can(PERMISSIONS.ventesVoir)) {
+    return (
+      <AccessRestricted
+        breadcrumb={[maison.displayName, "Boutique", "Ventes"]}
+        title="Détail de vente"
+        permissionLabel="Consulter les ventes"
+      />
+    );
+  }
 
   const { data: sale } = await session.supabase
     .from("transactions")
@@ -45,6 +55,8 @@ export default async function SalePage({
 
   if (!sale) notFound();
 
+  // Le ticket imprimable vit dans l'application caisse, déployée à part.
+  const posUrl = process.env.NEXT_PUBLIC_POS_URL;
   const canInvoice = session.can(PERMISSIONS.ventesFacturer);
   const canPay = session.can(PERMISSIONS.ventesPaiement);
   const outstanding = sale.outstanding_balance ?? 0;
@@ -227,9 +239,16 @@ export default async function SalePage({
                   <p className="text-body text-mid-gray">Vente intégralement réglée.</p>
                 )}
 
-                <Link href={`/pos/ticket/${transactionId}`} className={buttonGhost}>
-                  Voir le ticket imprimable
-                </Link>
+                {posUrl && (
+                  <a
+                    href={`${posUrl}/ticket/${transactionId}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={buttonGhost}
+                  >
+                    Voir le ticket imprimable ↗
+                  </a>
+                )}
               </div>
             </Card>
 

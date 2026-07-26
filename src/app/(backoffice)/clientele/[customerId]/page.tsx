@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getStaffSession } from "@/actions/auth-guard";
 import { getMaison } from "@/lib/maison";
+import { AccessRestricted } from "@/components/access-restricted";
 import { deleteCustomer, updateCustomer, updateCustomerPreferences } from "@/actions/customers";
 import { ActionButton } from "@/components/action-button";
 import { ActionForm } from "@/components/action-form";
@@ -32,6 +33,15 @@ export default async function CustomerPage({
   const { customerId } = await params;
   const [session, maison] = await Promise.all([getStaffSession(), getMaison()]);
   if (!session) return null;
+  if (!session.can(PERMISSIONS.clienteleVoir)) {
+    return (
+      <AccessRestricted
+        breadcrumb={[maison.displayName, "Boutique", "Clientèle"]}
+        title="Fiche client"
+        permissionLabel="Consulter les clients"
+      />
+    );
+  }
 
   const { data: customer } = await session.supabase
     .from("customers")

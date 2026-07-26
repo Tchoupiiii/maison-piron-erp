@@ -3,6 +3,8 @@ import { getStaffSession } from "@/actions/auth-guard";
 import { getMaison } from "@/lib/maison";
 import { createProduct } from "@/actions/products";
 import { ActionForm } from "@/components/action-form";
+import { GemstoneLinesEditor } from "@/components/gemstone-lines-editor";
+import { AccessRestricted } from "@/components/access-restricted";
 import {
   Badge,
   Card,
@@ -38,6 +40,15 @@ export default async function InventairePage({
   const { q, statut, nouveau } = await searchParams;
   const [session, maison] = await Promise.all([getStaffSession(), getMaison()]);
   if (!session) return null;
+  if (!session.can(PERMISSIONS.inventaireVoir)) {
+    return (
+      <AccessRestricted
+        breadcrumb={[maison.displayName, "Boutique", "Inventaire"]}
+        title="Inventaire"
+        permissionLabel="Consulter l'inventaire"
+      />
+    );
+  }
 
   let query = session.supabase
     .from("products")
@@ -59,6 +70,13 @@ export default async function InventairePage({
   async function submitProduct(formData: FormData): Promise<ActionResult<unknown>> {
     "use server";
     const weight = Number(formData.get("weightGrams"));
+    // Aucune confiance dans ce JSON client : le zod de createProduct fait foi.
+    let gemstones: unknown = [];
+    try {
+      gemstones = JSON.parse(String(formData.get("gemstonesJson") ?? "[]"));
+    } catch {
+      return { ok: false, error: "Pierres illisibles" };
+    }
     return createProduct({
       sku: String(formData.get("sku") ?? ""),
       name: String(formData.get("name") ?? ""),
@@ -80,7 +98,7 @@ export default async function InventairePage({
               },
             ]
           : [],
-      gemstones: [],
+      gemstones: gemstones as Parameters<typeof createProduct>[0]["gemstones"],
     });
   }
 
@@ -210,6 +228,10 @@ export default async function InventairePage({
                 <span className={labelClass}>Description</span>
                 <textarea name="description" rows={2} className={`${inputClass} h-auto py-2`} />
               </label>
+              <div className="col-span-full flex flex-col gap-1">
+                <span className={labelClass}>Pierres</span>
+                <GemstoneLinesEditor />
+              </div>
               <div className="col-span-full">
                 <button type="submit" className={buttonPrimary}>
                   Créer la pièce

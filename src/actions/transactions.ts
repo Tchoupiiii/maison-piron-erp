@@ -241,7 +241,6 @@ export async function returnSoldItem(
 
     revalidatePath("/ventes");
     revalidatePath("/inventaire");
-    revalidatePath("/pos");
     revalidatePath("/dashboard");
     return {
       ok: true,

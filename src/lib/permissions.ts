@@ -83,14 +83,71 @@ export const ACTIVITY_LABELS: Record<string, string> = {
   sync_metaux: "Synchronisation des cours",
 };
 
-/** Une entrée de navigation n'apparaît que si l'employé a la permission requise. */
-export const NAV_ITEMS = [
+/**
+ * Une entrée de navigation n'apparaît que si l'employé a l'une des permissions
+ * requises (`null` = toujours visible).
+ */
+export const NAV_ITEMS: readonly {
+  href: string;
+  label: string;
+  permission: PermissionKey | readonly PermissionKey[] | null;
+}[] = [
   { href: "/dashboard", label: "Tableau de bord", permission: null },
   { href: "/inventaire", label: "Inventaire", permission: PERMISSIONS.inventaireVoir },
   { href: "/atelier", label: "Atelier", permission: PERMISSIONS.atelierVoir },
   { href: "/clientele", label: "Clientèle", permission: PERMISSIONS.clienteleVoir },
   { href: "/ventes", label: "Ventes & factures", permission: PERMISSIONS.ventesVoir },
   { href: "/cours-metaux", label: "Cours des métaux", permission: PERMISSIONS.metauxVoir },
-  { href: "/pos", label: "Point de vente", permission: PERMISSIONS.ventesCreer },
-  { href: "/reglages", label: "Réglages", permission: PERMISSIONS.systemeEmployes },
+  // Le point de vente est une application séparée (même base, mêmes comptes) :
+  // l'entrée disparaît du menu si son URL n'est pas configurée.
+  {
+    href: process.env.NEXT_PUBLIC_POS_URL ?? "",
+    label: "Point de vente",
+    permission: PERMISSIONS.ventesCreer,
+  },
+  {
+    href: "/reglages",
+    label: "Réglages",
+    // La page accepte l'un OU l'autre : le menu doit refléter la même règle.
+    permission: [PERMISSIONS.systemeEmployes, PERMISSIONS.systemeJournal],
+  },
+] as const;
+
+/**
+ * Regroupement de l'écran Réglages > Permissions « par page » : la ligne
+ * `viewKey` (accès à la page) s'affiche en premier, les actions du domaine
+ * dessous. Dérivé de la convention `<domaine>.<action>` du catalogue —
+ * aucune colonne SQL supplémentaire.
+ */
+export const PERMISSION_PAGES: readonly {
+  title: string;
+  /** Clé « accès à la page » ; null = pas de ligne d'accès (cas Réglages). */
+  viewKey: string | null;
+  prefix?: string;
+  only?: readonly string[];
+  exclude?: readonly string[];
+  note?: string;
+}[] = [
+  { title: "Inventaire", viewKey: PERMISSIONS.inventaireVoir, prefix: "inventaire." },
+  { title: "Atelier", viewKey: PERMISSIONS.atelierVoir, prefix: "atelier." },
+  { title: "Clientèle", viewKey: PERMISSIONS.clienteleVoir, prefix: "clientele." },
+  {
+    title: "Ventes & factures",
+    viewKey: PERMISSIONS.ventesVoir,
+    prefix: "ventes.",
+    exclude: [PERMISSIONS.ventesCreer],
+  },
+  {
+    title: "Point de vente",
+    viewKey: PERMISSIONS.ventesCreer,
+    only: [PERMISSIONS.ventesCreer],
+    note: "Ce droit ouvre la caisse : encaisser une vente, scanner, réserver.",
+  },
+  { title: "Cours des métaux", viewKey: PERMISSIONS.metauxVoir, prefix: "metaux." },
+  {
+    title: "Réglages (Système)",
+    viewKey: null,
+    prefix: "systeme.",
+    note: "L'accès à la page Réglages est ouvert par « Gérer les employés » ou « Consulter le journal ».",
+  },
 ] as const;

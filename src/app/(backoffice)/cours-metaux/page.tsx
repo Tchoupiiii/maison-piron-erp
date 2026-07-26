@@ -4,6 +4,7 @@ import { syncMetalRatesNow } from "@/actions/metals";
 import { recalculatePricesForRateChange } from "@/actions/pricing";
 import { ActionButton } from "@/components/action-button";
 import { MetalRatesCard } from "@/components/metal-rates-card";
+import { AccessRestricted } from "@/components/access-restricted";
 import { RateConverter } from "@/components/rate-converter";
 import {
   Badge,
@@ -25,10 +26,20 @@ type MetalKind = Database["public"]["Enums"]["metal_kind"];
 export default async function CoursMetauxPage() {
   const [session, maison] = await Promise.all([getStaffSession(), getMaison()]);
   if (!session) return null;
+  if (!session.can(PERMISSIONS.metauxVoir)) {
+    return (
+      <AccessRestricted
+        breadcrumb={[maison.displayName, "Système", "Cours des métaux"]}
+        title="Cours des métaux"
+        permissionLabel="Consulter les cours"
+      />
+    );
+  }
 
   const [
     { data: rates },
-    { data: syncLog },
+    { data: lastSync },
+    { data: syncFailures },
     { data: titles },
     { data: repriceableIds },
     { data: brief },
@@ -41,7 +52,14 @@ export default async function CoursMetauxPage() {
       .from("metal_sync_log")
       .select("id, started_at, duration_ms, status, http_status, rates_upserted, triggered_by, error_message")
       .order("started_at", { ascending: false })
-      .limit(12),
+      .limit(1)
+      .maybeSingle(),
+    session.supabase
+      .from("metal_sync_log")
+      .select("id, started_at, duration_ms, status, http_status, rates_upserted, triggered_by, error_message")
+      .eq("status", "echec")
+      .order("started_at", { ascending: false })
+      .limit(8),
     session.supabase
       .from("metal_titles")
       .select("metal_kind, purity_per_mille, label")
@@ -187,32 +205,48 @@ export default async function CoursMetauxPage() {
           </Card>
 
           <div className="flex flex-col gap-6">
-            <Card title="Journal de synchronisation" subtitle="Durées réellement mesurées">
-              {(syncLog ?? []).length === 0 ? (
+            <Card title="Journal de synchronisation" subtitle="Seuls les échecs sont listés">
+              {!lastSync ? (
                 <p className="p-5 text-body text-mid-gray">Aucune synchronisation.</p>
               ) : (
                 <div className="flex flex-col">
-                  {syncLog!.map((entry) => (
-                    <div
-                      key={entry.id}
-                      className="grid grid-cols-[145px_1fr_auto_auto] items-center gap-4 border-b border-canvas px-5 py-3 last:border-b-0"
-                    >
-                      <span className="tabular text-[13px] text-mid-gray">
-                        {entry.started_at.slice(0, 16).replace("T", " ")}
-                      </span>
-                      <span className="text-[13px]">
-                        {entry.triggered_by === "cron" ? "Cron Vercel" : "Manuel"} ·{" "}
-                        {entry.rates_upserted} cours
-                        {entry.error_message ? ` · ${entry.error_message}` : ""}
-                      </span>
-                      <span className="tabular text-[13px] text-mid-gray">
-                        {entry.duration_ms ?? 0} ms
-                      </span>
-                      <Badge tone={entry.status === "echec" ? "danger" : "neutral"}>
-                        {entry.status}
-                      </Badge>
-                    </div>
-                  ))}
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-canvas px-5 py-3">
+                    <span className="text-[13px]">
+                      Dernière sync :{" "}
+                      <span className="tabular text-mid-gray">
+                        {lastSync.started_at.slice(0, 16).replace("T", " ")}
+                      </span>{" "}
+                      · {lastSync.triggered_by === "cron" ? "Cron Vercel" : "Manuel"} ·{" "}
+                      {lastSync.rates_upserted} cours ·{" "}
+                      <span className="tabular text-mid-gray">{lastSync.duration_ms ?? 0} ms</span>
+                    </span>
+                    <Badge tone={lastSync.status === "echec" ? "danger" : "neutral"}>
+                      {lastSync.status}
+                    </Badge>
+                  </div>
+                  {(syncFailures ?? []).length === 0 ? (
+                    <p className="p-5 text-body text-mid-gray">Aucun échec récent.</p>
+                  ) : (
+                    syncFailures!.map((entry) => (
+                      <div
+                        key={entry.id}
+                        className="grid grid-cols-[145px_1fr_auto_auto] items-center gap-4 border-b border-canvas px-5 py-3 last:border-b-0"
+                      >
+                        <span className="tabular text-[13px] text-mid-gray">
+                          {entry.started_at.slice(0, 16).replace("T", " ")}
+                        </span>
+                        <span className="text-[13px]">
+                          {entry.triggered_by === "cron" ? "Cron Vercel" : "Manuel"} ·{" "}
+                          {entry.rates_upserted} cours
+                          {entry.error_message ? ` · ${entry.error_message}` : ""}
+                        </span>
+                        <span className="tabular text-[13px] text-mid-gray">
+                          {entry.duration_ms ?? 0} ms
+                        </span>
+                        <Badge tone="danger">{entry.status}</Badge>
+                      </div>
+                    ))
+                  )}
                 </div>
               )}
             </Card>

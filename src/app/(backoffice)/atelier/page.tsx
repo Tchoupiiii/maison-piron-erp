@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getStaffSession } from "@/actions/auth-guard";
 import { getMaison } from "@/lib/maison";
+import { AccessRestricted } from "@/components/access-restricted";
 import { createRepairTicket, updateRepairStatus } from "@/actions/repairs";
 import { ActionButton } from "@/components/action-button";
 import { ActionForm } from "@/components/action-form";
@@ -33,6 +34,15 @@ export default async function AtelierPage({
   const { nouveau } = await searchParams;
   const [session, maison] = await Promise.all([getStaffSession(), getMaison()]);
   if (!session) return null;
+  if (!session.can(PERMISSIONS.atelierVoir)) {
+    return (
+      <AccessRestricted
+        breadcrumb={[maison.displayName, "Boutique", "Atelier"]}
+        title="Atelier"
+        permissionLabel="Consulter l'atelier"
+      />
+    );
+  }
 
   const today = new Date().toISOString().slice(0, 10);
 

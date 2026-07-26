@@ -3,9 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { MetalChart } from "@/components/metal-chart";
 import { Card } from "@/components/ui";
-import type { Database } from "@/types/database.types";
 
-type MetalKind = Database["public"]["Enums"]["metal_kind"];
 type Point = { date: string; value: number };
 type Title = { purity_per_mille: number; label: string };
 
@@ -44,8 +42,10 @@ export function MetalRatesCard({
 
   useEffect(() => {
     // Lu uniquement après le montage : le premier rendu doit rester identique
-    // au HTML serveur (défaut M6), sans quoi React signale un mismatch.
+    // au HTML serveur (défaut Y2), sans quoi React signale un mismatch. Le
+    // setState synchrone est voulu — localStorage est inaccessible plus tôt.
     const stored = localStorage.getItem(STORAGE_KEY) as RangeKey | null;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (stored && RANGES.some((r) => r.key === stored)) setRange(stored);
   }, []);
 

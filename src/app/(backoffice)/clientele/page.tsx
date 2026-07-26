@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getStaffSession } from "@/actions/auth-guard";
 import { getMaison } from "@/lib/maison";
+import { AccessRestricted } from "@/components/access-restricted";
 import { createCustomer } from "@/actions/customers";
 import { ActionForm } from "@/components/action-form";
 import {
@@ -27,6 +28,15 @@ export default async function ClientelePage({
   const { q, nouveau } = await searchParams;
   const [session, maison] = await Promise.all([getStaffSession(), getMaison()]);
   if (!session) return null;
+  if (!session.can(PERMISSIONS.clienteleVoir)) {
+    return (
+      <AccessRestricted
+        breadcrumb={[maison.displayName, "Boutique", "Clientèle"]}
+        title="Clientèle"
+        permissionLabel="Consulter les clients"
+      />
+    );
+  }
 
   let query = session.supabase
     .from("customers")

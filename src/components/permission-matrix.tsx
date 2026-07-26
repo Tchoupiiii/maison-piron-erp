@@ -3,16 +3,35 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { setRolePermission, setStaffPermission } from "@/actions/staff";
-import { PERMISSION_CATEGORIES, STAFF_ROLE_LABELS } from "@/lib/permissions";
+import { PERMISSION_PAGES, STAFF_ROLE_LABELS } from "@/lib/permissions";
 import { selectClass } from "@/components/ui";
 import type { Database } from "@/types/database.types";
 
 type StaffRole = Database["public"]["Enums"]["staff_role"];
 type Permission = { key: string; category: string; label: string; description: string };
+type PermissionPage = (typeof PERMISSION_PAGES)[number];
 
 const EDITABLE_ROLES: StaffRole[] = ["gemmologue", "vendeuse"];
 
-/** Matrice « par catégorie » : les droits par défaut de chaque rôle. */
+const DIMMED_TITLE = "Sans accès à la page, ce droit est sans effet";
+
+/** Lignes du bloc « page », la ligne d'accès (`viewKey`) en premier. */
+function pageRows(page: PermissionPage, permissions: Permission[]): Permission[] {
+  const rows = page.only
+    ? permissions.filter((p) => page.only!.includes(p.key))
+    : permissions.filter(
+        (p) =>
+          page.prefix !== undefined &&
+          p.key.startsWith(page.prefix) &&
+          !(page.exclude ?? []).includes(p.key),
+      );
+  return [
+    ...rows.filter((r) => r.key === page.viewKey),
+    ...rows.filter((r) => r.key !== page.viewKey),
+  ];
+}
+
+/** Matrice « par page » : les droits par défaut de chaque rôle. */
 export function RolePermissionMatrix({
   permissions,
   rolePermissions,
@@ -20,23 +39,60 @@ export function RolePermissionMatrix({
   permissions: Permission[];
   rolePermissions: { role: StaffRole; permission_key: string }[];
 }) {
-  const [pending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  // Optimistic par case : la valeur cliquée s'affiche immédiatement, la case
+  // n'est désactivée que pendant sa propre requête (pas de pending global).
+  const [optimistic, setOptimistic] = useState<Record<string, boolean>>({});
+  const [inFlight, setInFlight] = useState<Set<string>>(new Set());
   const router = useRouter();
 
   const granted = new Set(rolePermissions.map((r) => `${r.role}:${r.permission_key}`));
 
+  // L'overlay optimiste n'est purgé que sur erreur (rollback) : après succès il
+  // vaut exactement la valeur serveur, le garder ne change rien à l'affichage.
+  const isChecked = (role: StaffRole, key: string) => {
+    const k = `${role}:${key}`;
+    return optimistic[k] ?? granted.has(k);
+  };
+
+  function toggle(role: StaffRole, key: string, next: boolean) {
+    const k = `${role}:${key}`;
+    setError(null);
+    setOptimistic((prev) => ({ ...prev, [k]: next }));
+    setInFlight((prev) => new Set(prev).add(k));
+    startTransition(async () => {
+      const result = await setRolePermission(role, key, next);
+      if (!result.ok) {
+        setError(result.error);
+        // Rollback : on retire la valeur optimiste, la case revient au serveur.
+        setOptimistic((prev) => {
+          const copy = { ...prev };
+          delete copy[k];
+          return copy;
+        });
+      } else {
+        router.refresh();
+      }
+      setInFlight((prev) => {
+        const copy = new Set(prev);
+        copy.delete(k);
+        return copy;
+      });
+    });
+  }
+
   return (
     <div className="flex flex-col">
       {error && <p className="px-5 pt-4 text-caption text-ember">{error}</p>}
-      {PERMISSION_CATEGORIES.map((category) => {
-        const rows = permissions.filter((p) => p.category === category);
+      {PERMISSION_PAGES.map((page) => {
+        const rows = pageRows(page, permissions);
         if (rows.length === 0) return null;
         return (
-          <div key={category} className="border-b border-canvas last:border-b-0">
+          <div key={page.title} className="border-b border-canvas last:border-b-0">
             <div className="grid grid-cols-[1fr_120px_120px] items-center gap-4 bg-surface-alt px-5 py-2">
               <span className="text-caption uppercase tracking-[0.6px] text-mid-gray">
-                {category}
+                {page.title}
               </span>
               {EDITABLE_ROLES.map((role) => (
                 <span
@@ -47,39 +103,56 @@ export function RolePermissionMatrix({
                 </span>
               ))}
             </div>
-            {rows.map((permission) => (
-              <div
-                key={permission.key}
-                className="grid grid-cols-[1fr_120px_120px] items-center gap-4 px-5 py-3"
-              >
-                <div className="flex min-w-0 flex-col">
-                  <span className="text-body">{permission.label}</span>
-                  <span className="text-caption text-mid-gray">{permission.description}</span>
+            {page.note && (
+              <p className="px-5 pt-2 text-caption text-mid-gray">{page.note}</p>
+            )}
+            {rows.map((permission) => {
+              const isViewRow = permission.key === page.viewKey;
+              return (
+                <div
+                  key={permission.key}
+                  className="grid grid-cols-[1fr_120px_120px] items-center gap-4 px-5 py-3"
+                >
+                  <div className={`flex min-w-0 flex-col ${isViewRow ? "" : "pl-8"}`}>
+                    <span className="text-body">
+                      {isViewRow && page.viewKey !== null && !page.only
+                        ? "Accès à la page"
+                        : permission.label}
+                    </span>
+                    <span className="text-caption text-mid-gray">
+                      {permission.description}
+                    </span>
+                  </div>
+                  {EDITABLE_ROLES.map((role) => {
+                    const k = `${role}:${permission.key}`;
+                    // Une action dont la page est inaccessible au rôle reste
+                    // cliquable mais s'affiche estompée : la garde de page
+                    // bloque de toute façon, pas besoin de cascade en base.
+                    const dimmed =
+                      !isViewRow &&
+                      page.viewKey !== null &&
+                      !isChecked(role, page.viewKey);
+                    return (
+                      <label
+                        key={role}
+                        className={`flex justify-center ${dimmed ? "opacity-40" : ""}`}
+                        title={dimmed ? DIMMED_TITLE : undefined}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked(role, permission.key)}
+                          disabled={inFlight.has(k)}
+                          className="size-4 accent-ink"
+                          onChange={(event) =>
+                            toggle(role, permission.key, event.target.checked)
+                          }
+                        />
+                      </label>
+                    );
+                  })}
                 </div>
-                {EDITABLE_ROLES.map((role) => {
-                  const checked = granted.has(`${role}:${permission.key}`);
-                  return (
-                    <label key={role} className="flex justify-center">
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        disabled={pending}
-                        className="size-4 accent-ink"
-                        onChange={(event) => {
-                          const next = event.target.checked;
-                          setError(null);
-                          startTransition(async () => {
-                            const result = await setRolePermission(role, permission.key, next);
-                            if (!result.ok) setError(result.error);
-                            router.refresh();
-                          });
-                        }}
-                      />
-                    </label>
-                  );
-                })}
-              </div>
-            ))}
+              );
+            })}
           </div>
         );
       })}
@@ -123,6 +196,9 @@ export function StaffPermissionPanel({
     overrides.filter((o) => o.staff_id === person.id).map((o) => [o.permission_key, o.granted]),
   );
 
+  /** Droit effectif de la personne : exception nominative, sinon défaut du rôle. */
+  const effective = (key: string) => overrideMap.get(key) ?? roleDefaults.has(key);
+
   return (
     <div className="flex flex-col gap-4 p-5">
       <label className="flex max-w-xs flex-col gap-1">
@@ -143,26 +219,36 @@ export function StaffPermissionPanel({
       {error && <p className="text-caption text-ember">{error}</p>}
 
       <div className="flex flex-col gap-1">
-        {PERMISSION_CATEGORIES.map((category) => {
-          const rows = permissions.filter((p) => p.category === category);
+        {PERMISSION_PAGES.map((page) => {
+          const rows = pageRows(page, permissions);
           if (rows.length === 0) return null;
+          const pageAccessible = page.viewKey === null || effective(page.viewKey);
           return (
-            <div key={category} className="flex flex-col">
+            <div key={page.title} className="flex flex-col">
               <span className="pb-1 pt-3 text-caption uppercase tracking-[0.6px] text-mid-gray">
-                {category}
+                {page.title}
               </span>
               {rows.map((permission) => {
+                const isViewRow = permission.key === page.viewKey;
                 const override = overrideMap.get(permission.key);
                 const value =
                   override === undefined ? "defaut" : override ? "accorde" : "retire";
                 const byDefault = roleDefaults.has(permission.key);
+                const dimmed = !isViewRow && !pageAccessible;
                 return (
                   <div
                     key={permission.key}
-                    className="grid grid-cols-[1fr_180px] items-center gap-4 border-b border-canvas py-2 last:border-b-0"
+                    className={`grid grid-cols-[1fr_180px] items-center gap-4 border-b border-canvas py-2 last:border-b-0 ${
+                      dimmed ? "opacity-40" : ""
+                    }`}
+                    title={dimmed ? DIMMED_TITLE : undefined}
                   >
-                    <div className="flex min-w-0 flex-col">
-                      <span className="text-body">{permission.label}</span>
+                    <div className={`flex min-w-0 flex-col ${isViewRow ? "" : "pl-8"}`}>
+                      <span className="text-body">
+                        {isViewRow && page.viewKey !== null && !page.only
+                          ? "Accès à la page"
+                          : permission.label}
+                      </span>
                       <span className="text-caption text-mid-gray">
                         Défaut du rôle : {byDefault ? "accordé" : "refusé"}
                       </span>

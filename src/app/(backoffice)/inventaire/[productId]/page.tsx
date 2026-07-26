@@ -3,10 +3,13 @@ import { notFound } from "next/navigation";
 import { getStaffSession } from "@/actions/auth-guard";
 import { getMaison } from "@/lib/maison";
 import {
+  addGemstone,
   deleteGemstoneCertificate,
   deleteProduct,
+  removeGemstone,
   replaceProductMaterials,
   setProductStatus,
+  updateGemstone,
   updateProduct,
 } from "@/actions/products";
 import { recalculateProductPrice, setProductPricingInputs } from "@/actions/pricing";
@@ -14,6 +17,7 @@ import { ActionButton } from "@/components/action-button";
 import { ActionForm } from "@/components/action-form";
 import { CertificateUploadForm } from "@/components/certificate-upload-form";
 import { PriceSimulator } from "@/components/price-simulator";
+import { AccessRestricted } from "@/components/access-restricted";
 import {
   Badge,
   Card,
@@ -28,12 +32,168 @@ import {
   labelClass,
   selectClass,
 } from "@/components/ui";
-import { formatEUR, PRODUCT_STATUS_LABELS } from "@/lib/constants";
+import {
+  CERTIFICATE_LAB_LABELS,
+  formatEUR,
+  GEMSTONE_TYPE_LABELS,
+  PRODUCT_STATUS_LABELS,
+} from "@/lib/constants";
 import { PERMISSIONS } from "@/lib/permissions";
 import type { ActionResult } from "@/actions/types";
 import type { Database } from "@/types/database.types";
 
 type MetalKind = Database["public"]["Enums"]["metal_kind"];
+
+type GemstoneInput = Parameters<typeof addGemstone>[1];
+
+function gemstoneInputFromForm(formData: FormData): GemstoneInput {
+  return {
+    name: String(formData.get("name") ?? ""),
+    gemstoneType: String(
+      formData.get("gemstoneType") ?? "autre",
+    ) as GemstoneInput["gemstoneType"],
+    caratWeight: Number(formData.get("caratWeight") ?? 0),
+    stoneCount: Number(formData.get("stoneCount") ?? 1),
+    pricePerCarat: Number(formData.get("pricePerCarat") ?? 0),
+    clarity: String(formData.get("clarity") ?? "") || null,
+    color: String(formData.get("color") ?? "") || null,
+    cut: String(formData.get("cut") ?? "") || null,
+    certificateLab: String(
+      formData.get("certificateLab") ?? "aucun",
+    ) as GemstoneInput["certificateLab"],
+    certificateNumber: String(formData.get("certificateNumber") ?? "") || null,
+  };
+}
+
+/** Champs communs aux formulaires « Ajouter » et « Modifier » une pierre. */
+function GemstoneFields({
+  defaults,
+}: {
+  defaults?: {
+    name: string;
+    gemstone_type: string;
+    carat_weight: number;
+    stone_count: number;
+    price_per_carat: number;
+    clarity: string | null;
+    color: string | null;
+    cut: string | null;
+    certificate_lab: string;
+    certificate_number: string | null;
+  };
+}) {
+  return (
+    <>
+      <label className="flex flex-col gap-1">
+        <span className={labelClass}>Nom de la pierre</span>
+        <input
+          name="name"
+          required
+          defaultValue={defaults?.name ?? ""}
+          placeholder="Saphir de Ceylan"
+          className={inputClass}
+        />
+      </label>
+      <label className="flex flex-col gap-1">
+        <span className={labelClass}>Type</span>
+        <select
+          name="gemstoneType"
+          defaultValue={defaults?.gemstone_type ?? "diamant"}
+          className={selectClass}
+        >
+          {Object.entries(GEMSTONE_TYPE_LABELS).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="flex flex-col gap-1">
+        <span className={labelClass}>Poids (ct)</span>
+        <input
+          name="caratWeight"
+          type="number"
+          min="0.001"
+          step="0.001"
+          required
+          defaultValue={defaults?.carat_weight ?? ""}
+          className={inputClass}
+        />
+      </label>
+      <label className="flex flex-col gap-1">
+        <span className={labelClass}>Nombre</span>
+        <input
+          name="stoneCount"
+          type="number"
+          min="1"
+          step="1"
+          defaultValue={defaults?.stone_count ?? 1}
+          className={inputClass}
+        />
+      </label>
+      <label className="flex flex-col gap-1">
+        <span className={labelClass}>Prix au carat (€)</span>
+        <input
+          name="pricePerCarat"
+          type="number"
+          min="0"
+          step="0.01"
+          defaultValue={defaults?.price_per_carat ?? 0}
+          className={inputClass}
+        />
+      </label>
+      <label className="flex flex-col gap-1">
+        <span className={labelClass}>Pureté</span>
+        <input
+          name="clarity"
+          defaultValue={defaults?.clarity ?? ""}
+          placeholder="VS1"
+          className={inputClass}
+        />
+      </label>
+      <label className="flex flex-col gap-1">
+        <span className={labelClass}>Couleur</span>
+        <input
+          name="color"
+          defaultValue={defaults?.color ?? ""}
+          placeholder="F"
+          className={inputClass}
+        />
+      </label>
+      <label className="flex flex-col gap-1">
+        <span className={labelClass}>Taille</span>
+        <input
+          name="cut"
+          defaultValue={defaults?.cut ?? ""}
+          placeholder="Brillant"
+          className={inputClass}
+        />
+      </label>
+      <label className="flex flex-col gap-1">
+        <span className={labelClass}>Laboratoire</span>
+        <select
+          name="certificateLab"
+          defaultValue={defaults?.certificate_lab ?? "aucun"}
+          className={selectClass}
+        >
+          {Object.entries(CERTIFICATE_LAB_LABELS).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="flex flex-col gap-1">
+        <span className={labelClass}>N° de certificat</span>
+        <input
+          name="certificateNumber"
+          defaultValue={defaults?.certificate_number ?? ""}
+          className={inputClass}
+        />
+      </label>
+    </>
+  );
+}
 
 export default async function ProductPage({
   params,
@@ -43,6 +203,15 @@ export default async function ProductPage({
   const { productId } = await params;
   const [session, maison] = await Promise.all([getStaffSession(), getMaison()]);
   if (!session) return null;
+  if (!session.can(PERMISSIONS.inventaireVoir)) {
+    return (
+      <AccessRestricted
+        breadcrumb={[maison.displayName, "Boutique", "Inventaire"]}
+        title="Fiche pièce"
+        permissionLabel="Consulter l'inventaire"
+      />
+    );
+  }
 
   const { data: product } = await session.supabase
     .from("products")
@@ -136,6 +305,23 @@ export default async function ProductPage({
       laborDescription: String(formData.get("laborDescription") ?? "") || undefined,
     });
   }
+
+  async function submitNewGemstone(formData: FormData): Promise<ActionResult<unknown>> {
+    "use server";
+    return addGemstone(productId, gemstoneInputFromForm(formData));
+  }
+
+  async function saveGemstone(
+    gemstoneId: string,
+    formData: FormData,
+  ): Promise<ActionResult<unknown>> {
+    "use server";
+    return updateGemstone(productId, gemstoneId, gemstoneInputFromForm(formData));
+  }
+
+  const gemstoneSuccessMessage = canPrice
+    ? "Pierre enregistrée, prix recalculé."
+    : "Pierre enregistrée. Recalculez le prix pour la répercuter.";
 
   return (
     <>
@@ -323,10 +509,11 @@ export default async function ProductPage({
               )}
             </Card>
 
-            <Card title="Pierres">
-              {(product.product_gemstones ?? []).length === 0 ? (
+            <Card title="Pierres" subtitle="Elles entrent dans le prix calculé.">
+              {(product.product_gemstones ?? []).length === 0 && (
                 <p className="p-5 text-body text-mid-gray">Aucune pierre.</p>
-              ) : (
+              )}
+              {(product.product_gemstones ?? []).length > 0 && (
                 <div className="flex flex-col">
                   {product.product_gemstones.map((g) => (
                     <div
@@ -352,8 +539,37 @@ export default async function ProductPage({
                           >
                             Certificat imprimable
                           </Link>
+                          {canEdit && !isSold && (
+                            <ActionButton
+                              action={removeGemstone.bind(null, productId, g.id)}
+                              className={`${buttonGhost} h-9 min-h-9 px-3 text-caption`}
+                              confirm={`Retirer ${g.name} ? Ses certificats scannés seront supprimés.`}
+                            >
+                              Retirer
+                            </ActionButton>
+                          )}
                         </div>
                       </div>
+
+                      {canEdit && !isSold && (
+                        <details className="rounded-card border border-hairline bg-surface-alt">
+                          <summary className="cursor-pointer px-3 py-2 text-caption text-mid-gray">
+                            Modifier la pierre
+                          </summary>
+                          <ActionForm
+                            action={saveGemstone.bind(null, g.id)}
+                            className="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-3 p-3"
+                            successMessage={gemstoneSuccessMessage}
+                          >
+                            <GemstoneFields defaults={g} />
+                            <div className="col-span-full">
+                              <button type="submit" className={buttonPrimary}>
+                                Enregistrer la pierre
+                              </button>
+                            </div>
+                          </ActionForm>
+                        </details>
+                      )}
 
                       <div className="flex flex-col gap-2 rounded-card border border-hairline bg-surface-alt p-3">
                         <span className={labelClass}>Certificat scanné (labo)</span>
@@ -392,6 +608,27 @@ export default async function ProductPage({
                   ))}
                 </div>
               )}
+
+              {canEdit && !isSold && (
+                <details className="border-t border-canvas">
+                  <summary className="cursor-pointer px-5 py-3 text-body text-mid-gray">
+                    Ajouter une pierre
+                  </summary>
+                  <ActionForm
+                    action={submitNewGemstone}
+                    className="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-3 px-5 pb-5"
+                    successMessage={gemstoneSuccessMessage}
+                    resetOnSuccess
+                  >
+                    <GemstoneFields />
+                    <div className="col-span-full">
+                      <button type="submit" className={buttonPrimary}>
+                        Ajouter la pierre
+                      </button>
+                    </div>
+                  </ActionForm>
+                </details>
+              )}
             </Card>
           </div>
 
@@ -407,10 +644,16 @@ export default async function ProductPage({
                   metalKind: material?.metal_kind ?? "or",
                   purityPerMille: material?.purity_per_mille ?? 750,
                   weightGrams: material?.weight_grams ?? 0,
-                  stoneCost,
                   laborCostEur: product.labor_cost_eur,
                   marginMultiplier: product.margin_multiplier,
                 }}
+                initialGemstones={(product.product_gemstones ?? []).map((g) => ({
+                  id: g.id,
+                  name: g.name,
+                  caratWeight: g.carat_weight,
+                  stoneCount: g.stone_count,
+                  pricePerCarat: g.price_per_carat,
+                }))}
               />
             </Card>
 

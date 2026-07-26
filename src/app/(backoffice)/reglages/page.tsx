@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { getStaffSession } from "@/actions/auth-guard";
 import {
   createStaffAccount,
@@ -18,6 +17,7 @@ import {
   RolePermissionMatrix,
   StaffPermissionPanel,
 } from "@/components/permission-matrix";
+import { AccessRestricted } from "@/components/access-restricted";
 import {
   Badge,
   Card,
@@ -57,7 +57,14 @@ export default async function ReglagesPage({
   if (!session) return null;
 
   if (!session.can(PERMISSIONS.systemeEmployes) && !session.can(PERMISSIONS.systemeJournal)) {
-    notFound();
+    const maisonDenied = await getMaison();
+    return (
+      <AccessRestricted
+        breadcrumb={[maisonDenied.displayName, "Système", "Réglages"]}
+        title="Réglages"
+        permissionLabel="Gérer les employés ou Consulter le journal"
+      />
+    );
   }
 
   const tab = TABS.find((t) => t.key === onglet)?.key ?? "employes";
