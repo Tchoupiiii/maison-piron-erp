@@ -370,7 +370,7 @@ export default async function ProductPage({
                                 >
                                   Ouvrir le scan du {media.created_at.slice(0, 10)}
                                 </a>
-                                {canEdit && (
+                                {canDelete && (
                                   <ActionButton
                                     action={deleteGemstoneCertificate.bind(null, media.id)}
                                     className={`${buttonGhost} h-8 min-h-8 px-2 text-caption`}

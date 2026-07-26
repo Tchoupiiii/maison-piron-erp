@@ -4,6 +4,18 @@ import { logActivity } from "@/actions/activity";
 import { buttonPrimary, inputClass } from "@/components/ui";
 import { MAISON } from "@/lib/constants";
 
+/**
+ * `next` vient de l'URL, donc de n'importe qui. Seul un chemin interne est
+ * retenu : sans ce filtre, un lien portant le vrai domaine de la boutique
+ * renverrait l'employé vers une copie de cette page, ses identifiants déjà
+ * saisis. `//ailleurs.be` et `/\ailleurs.be` sont des URL absolues pour le
+ * navigateur, pas des chemins.
+ */
+function safeNext(value: string | null | undefined): string {
+  if (!value || !/^\/(?![/\\])/.test(value)) return "/dashboard";
+  return value;
+}
+
 export default async function LoginPage({
   searchParams,
 }: {
@@ -15,7 +27,7 @@ export default async function LoginPage({
     "use server";
     const supabase = await createClient();
     const identifier = String(formData.get("identifiant")).trim();
-    const target = String(formData.get("next") || "/dashboard");
+    const target = safeNext(String(formData.get("next") ?? ""));
 
     // Un employé de boutique n'a pas d'adresse professionnelle : il se connecte
     // avec son identifiant, que la base traduit en adresse technique interne.
@@ -57,7 +69,7 @@ export default async function LoginPage({
           <h1 className="text-heading-sm font-semibold">Connexion boutique</h1>
         </div>
 
-        <input type="hidden" name="next" value={next ?? "/dashboard"} />
+        <input type="hidden" name="next" value={safeNext(next)} />
 
         <label className="flex flex-col gap-1">
           <span className="text-[13px] text-mid-gray">Identifiant</span>

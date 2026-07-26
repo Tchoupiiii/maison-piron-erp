@@ -242,7 +242,29 @@ export async function replaceProductMaterials(
 }
 
 const CERTIFICATE_MAX_BYTES = 15 * 1024 * 1024;
-const CERTIFICATE_MIME_TYPES = new Set(["application/pdf", "image/jpeg", "image/png"]);
+
+/**
+ * Le type annoncé par le navigateur n'engage personne : un POST direct sur la
+ * Server Action déclare ce qu'il veut. Seuls les premiers octets disent ce
+ * qu'est vraiment le fichier, alors on les lit.
+ */
+const CERTIFICATE_FORMATS = [
+  { mime: "application/pdf", extension: "pdf", signature: [0x25, 0x50, 0x44, 0x46] }, // %PDF
+  { mime: "image/jpeg", extension: "jpg", signature: [0xff, 0xd8, 0xff] },
+  { mime: "image/png", extension: "png", signature: [0x89, 0x50, 0x4e, 0x47] },
+] as const;
+
+async function sniffCertificateFormat(file: File) {
+  const head = new Uint8Array(await file.slice(0, 8).arrayBuffer());
+  return CERTIFICATE_FORMATS.find((format) =>
+    format.signature.every((byte, index) => head[index] === byte),
+  );
+}
+
+const certificateTargetSchema = z.object({
+  productId: z.string().uuid(),
+  gemstoneId: z.string().uuid(),
+});
 
 /**
  * Le scan du certificat (PDF/photo) est un fichier attaché à la pierre, distinct
@@ -253,15 +275,20 @@ export async function uploadGemstoneCertificate(
   gemstoneId: string,
   formData: FormData,
 ): Promise<ActionResult<{ mediaId: string }>> {
+  const target = certificateTargetSchema.safeParse({ productId, gemstoneId });
+  if (!target.success) return { ok: false, error: "Pierre introuvable" };
+
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) {
     return { ok: false, error: "Choisissez un fichier" };
   }
-  if (!CERTIFICATE_MIME_TYPES.has(file.type)) {
-    return { ok: false, error: "Formats acceptés : PDF, JPEG, PNG" };
-  }
   if (file.size > CERTIFICATE_MAX_BYTES) {
     return { ok: false, error: "Fichier trop lourd (15 Mo maximum)" };
+  }
+
+  const format = await sniffCertificateFormat(file);
+  if (!format) {
+    return { ok: false, error: "Formats acceptés : PDF, JPEG, PNG" };
   }
 
   try {
@@ -275,12 +302,14 @@ export async function uploadGemstoneCertificate(
       .maybeSingle();
     if (!gemstone) return { ok: false, error: "Pierre introuvable" };
 
-    const extension = file.type === "application/pdf" ? "pdf" : file.type === "image/png" ? "png" : "jpg";
-    const storagePath = `${productId}/certificats/${gemstoneId}/${crypto.randomUUID()}.${extension}`;
+    const storagePath = `${productId}/certificats/${gemstoneId}/${crypto.randomUUID()}.${format.extension}`;
 
+    // Le type stocké vient de la signature lue, jamais de ce qu'annonce le
+    // client : un fichier ne peut pas être servi sous une autre nature que la
+    // sienne.
     const { error: uploadError } = await session.supabase.storage
       .from("produit_media")
-      .upload(storagePath, file, { contentType: file.type });
+      .upload(storagePath, file, { contentType: format.mime });
     if (uploadError) return { ok: false, error: uploadError.message };
 
     const { data: media, error } = await session.supabase
@@ -313,11 +342,20 @@ export async function uploadGemstoneCertificate(
   }
 }
 
+/**
+ * Supprimer le scan exige `inventaire.supprimer`, comme la policy Storage qui
+ * garde le bucket : avec `inventaire.modifier` seul, la ligne disparaissait et
+ * le fichier restait — l'action annonçait pourtant une suppression faite.
+ */
 export async function deleteGemstoneCertificate(
   mediaId: string,
 ): Promise<ActionResult<{ id: string }>> {
+  if (!z.string().uuid().safeParse(mediaId).success) {
+    return { ok: false, error: "Fichier introuvable" };
+  }
+
   try {
-    const session = await requirePermission(PERMISSIONS.inventaireModifier);
+    const session = await requirePermission(PERMISSIONS.inventaireSupprimer);
 
     const { data: media } = await session.supabase
       .from("product_media")
@@ -327,13 +365,27 @@ export async function deleteGemstoneCertificate(
       .maybeSingle();
     if (!media) return { ok: false, error: "Fichier introuvable" };
 
+    // Le fichier part en premier : c'est lui le document sensible. Une ligne
+    // orpheline se répare, un scan qu'on croit effacé ne se rattrape pas.
+    // Un refus de la policy Storage ne lève pas d'erreur, il ne retire
+    // simplement rien : c'est le tableau renvoyé qui fait foi.
+    const { data: removed, error: storageError } = await session.supabase.storage
+      .from("produit_media")
+      .remove([media.storage_path]);
+    if (storageError || !removed || removed.length === 0) {
+      return {
+        ok: false,
+        error: `Fichier non supprimé du stockage${
+          storageError ? ` : ${storageError.message}` : ", droits insuffisants"
+        }. La fiche n'a pas été modifiée.`,
+      };
+    }
+
     const { error: deleteError } = await session.supabase
       .from("product_media")
       .delete()
       .eq("id", mediaId);
     if (deleteError) return { ok: false, error: deleteError.message };
-
-    await session.supabase.storage.from("produit_media").remove([media.storage_path]);
 
     await logActivity(session, {
       action: "produit_modifie",

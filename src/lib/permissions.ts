@@ -23,6 +23,7 @@ export const PERMISSIONS = {
   ventesCreer: "ventes.creer",
   ventesFacturer: "ventes.facturer",
   ventesPaiement: "ventes.paiement",
+  ventesRemise: "ventes.remise",
   ventesRetour: "ventes.retour",
   metauxVoir: "metaux.voir",
   metauxSync: "metaux.sync",

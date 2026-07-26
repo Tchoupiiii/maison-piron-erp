@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { getStaffSession } from "@/actions/auth-guard";
+import { SignOutButton } from "@/components/sign-out-button";
 import { MAISON } from "@/lib/constants";
 
 /**
@@ -13,11 +13,24 @@ export default async function PosLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/auth/login");
+  // Une session Supabase ne suffit pas : il faut une fiche employé active, comme
+  // au back-office. La RLS refuserait déjà les données, mais autant le dire ici
+  // plutôt que d'afficher une caisse vide.
+  const session = await getStaffSession();
+  if (!session) {
+    return (
+      <main className="grid min-h-screen place-items-center p-6">
+        <div className="flex max-w-md flex-col gap-3 rounded-card border border-hairline bg-paper p-5 shadow-card">
+          <h1 className="text-subheading font-medium">Accès refusé</h1>
+          <p className="text-body text-mid-gray">
+            Ce compte n&apos;a pas de fiche employé active. Un administrateur doit
+            l&apos;activer depuis Réglages → Employés.
+          </p>
+          <SignOutButton />
+        </div>
+      </main>
+    );
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-canvas print:min-h-0 print:bg-white">
