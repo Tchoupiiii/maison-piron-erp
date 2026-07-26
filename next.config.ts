@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Pas de pastille Next.js en surimpression : l'écran est celui de la boutique.
+  devIndicators: false,
 };
 
 export default nextConfig;
