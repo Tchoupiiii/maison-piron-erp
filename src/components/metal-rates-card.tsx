@@ -18,11 +18,10 @@ const RANGES = [
   { key: "M6", label: "6 mois", days: 182 },
   { key: "Y1", label: "1 an", days: 365 },
   { key: "Y2", label: "2 ans", days: 730 },
-  { key: "ALL", label: "Tout", days: null },
 ] as const;
 
 type RangeKey = (typeof RANGES)[number]["key"];
-const DEFAULT_RANGE: RangeKey = "M6";
+const DEFAULT_RANGE: RangeKey = "Y2";
 
 function cutoffDate(lastDate: string, days: number): string {
   const d = new Date(`${lastDate}T00:00:00Z`);
@@ -56,16 +55,16 @@ export function MetalRatesCard({
   }
 
   const lastDate = goldSeries.at(-1)?.date ?? silverSeries.at(-1)?.date ?? null;
-  const activeRange = RANGES.find((r) => r.key === range) ?? RANGES[3];
+  const activeRange = RANGES.find((r) => r.key === range) ?? RANGES.find((r) => r.key === DEFAULT_RANGE)!;
 
   const filteredGold = useMemo(() => {
-    if (!lastDate || activeRange.days === null) return goldSeries;
+    if (!lastDate) return goldSeries;
     const cutoff = cutoffDate(lastDate, activeRange.days);
     return goldSeries.filter((p) => p.date >= cutoff);
   }, [goldSeries, lastDate, activeRange]);
 
   const filteredSilver = useMemo(() => {
-    if (!lastDate || activeRange.days === null) return silverSeries;
+    if (!lastDate) return silverSeries;
     const cutoff = cutoffDate(lastDate, activeRange.days);
     return silverSeries.filter((p) => p.date >= cutoff);
   }, [silverSeries, lastDate, activeRange]);

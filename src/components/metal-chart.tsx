@@ -78,16 +78,22 @@ export function MetalChart({
   const count = convertedPoints.length;
   const min = count ? Math.min(...convertedPoints.map((p) => p.value)) : 0;
   const max = count ? Math.max(...convertedPoints.map((p) => p.value)) : 0;
-  const span = max - min || Math.abs(max) * 0.01 || 1;
+  // Toutes les valeurs visibles sont égales (période courte, cours inchangé) :
+  // un vrai span à 0 ferait retomber min/milieu/max sur la même position et
+  // leurs étiquettes se chevaucheraient. On centre alors une ligne plate.
+  const isFlat = max - min === 0;
 
   const innerWidth = Math.max(0, width - GUTTER_LEFT - PAD_RIGHT);
   const innerHeight = HEIGHT - PAD_TOP - PAD_BOTTOM;
 
   const xAt = (index: number) =>
     GUTTER_LEFT + (count > 1 ? (index / (count - 1)) * innerWidth : innerWidth / 2);
-  const yAt = (value: number) => PAD_TOP + (1 - (value - min) / span) * innerHeight;
+  const yAt = (value: number) =>
+    isFlat
+      ? PAD_TOP + innerHeight / 2
+      : PAD_TOP + (1 - (value - min) / (max - min)) * innerHeight;
 
-  const ticks = [max, (min + max) / 2, min];
+  const ticks = isFlat ? [max] : [max, (min + max) / 2, min];
   const last = count ? convertedPoints[count - 1] : null;
   const hovered = hoverIndex !== null ? convertedPoints[hoverIndex] : null;
   const currentTitle = titles.find((t) => t.purity_per_mille === purity);
