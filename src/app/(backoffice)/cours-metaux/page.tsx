@@ -3,7 +3,7 @@ import { getMaison } from "@/lib/maison";
 import { syncMetalRatesNow } from "@/actions/metals";
 import { recalculatePricesForRateChange } from "@/actions/pricing";
 import { ActionButton } from "@/components/action-button";
-import { MetalChart } from "@/components/metal-chart";
+import { MetalRatesCard } from "@/components/metal-rates-card";
 import { RateConverter } from "@/components/rate-converter";
 import {
   Badge,
@@ -85,8 +85,8 @@ export default async function CoursMetauxPage() {
     platine: latest.platine?.value,
   };
 
-  const goldSeries = series.or.slice(-90);
-  const silverSeries = series.argent.slice(-90);
+  const goldSeries = series.or;
+  const silverSeries = series.argent;
   const seedOnly = (rates ?? []).every((r) => r.source === "seed");
 
   const goldChange =
@@ -171,15 +171,12 @@ export default async function CoursMetauxPage() {
           </Notice>
         )}
 
-        <Card
-          title="Or fin et argent · 90 derniers jours"
-          subtitle="market_rates · euros par gramme de métal pur · échelles indépendantes"
-        >
-          <div className="flex flex-col divide-y divide-hairline">
-            <MetalChart label="Or fin" points={goldSeries} />
-            <MetalChart label="Argent" points={silverSeries} />
-          </div>
-        </Card>
+        <MetalRatesCard
+          goldSeries={goldSeries}
+          silverSeries={silverSeries}
+          goldTitles={(titles ?? []).filter((t) => t.metal_kind === "or")}
+          silverTitles={(titles ?? []).filter((t) => t.metal_kind === "argent")}
+        />
 
         <div className="grid grid-cols-[repeat(auto-fit,minmax(340px,1fr))] items-start gap-6">
           <Card

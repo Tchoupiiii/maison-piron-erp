@@ -1,9 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { formatEUR } from "@/lib/constants";
+import { ratePerGramForPurity } from "@/lib/pricing/engine";
+import type { Database } from "@/types/database.types";
 
+type MetalKind = Database["public"]["Enums"]["metal_kind"];
 type Point = { date: string; value: number };
+type Title = { purity_per_mille: number; label: string };
 
 /* Le SVG est rendu à la taille réelle du conteneur (1 unité = 1 px CSS) :
    aucune déformation quelle que soit la largeur de fenêtre, contrairement à
@@ -17,10 +21,44 @@ const PAD_RIGHT = 20;
 /** Trait horizontal net : centré sur la moitié de pixel. */
 const crisp = (y: number) => Math.round(y) + 0.5;
 
-export function MetalChart({ label, points }: { label: string; points: Point[] }) {
+/**
+ * Titre mémorisé par métal, par navigateur : lu après le montage (jamais
+ * pendant le rendu serveur) pour ne pas produire de mismatch d'hydratation —
+ * le premier rendu affiche toujours le titre par défaut (999 ‰, or/argent fin).
+ */
+function storageKey(metalKind: MetalKind): string {
+  return `mp:cours-purity:${metalKind}`;
+}
+
+export function MetalChart({
+  label,
+  points,
+  metalKind,
+  titles,
+}: {
+  label: string;
+  points: Point[];
+  metalKind: MetalKind;
+  titles: Title[];
+}) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  const [purity, setPurity] = useState(999);
+
+  useEffect(() => {
+    const stored = Number(localStorage.getItem(storageKey(metalKind)));
+    if (stored && titles.some((t) => t.purity_per_mille === stored)) {
+      setPurity(stored);
+    }
+    // Un seul métal par instance : pas besoin de re-suivre metalKind/titles.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function selectPurity(value: number) {
+    setPurity(value);
+    localStorage.setItem(storageKey(metalKind), String(value));
+  }
 
   useEffect(() => {
     const el = wrapperRef.current;
@@ -32,9 +70,14 @@ export function MetalChart({ label, points }: { label: string; points: Point[] }
     return () => observer.disconnect();
   }, []);
 
-  const count = points.length;
-  const min = count ? Math.min(...points.map((p) => p.value)) : 0;
-  const max = count ? Math.max(...points.map((p) => p.value)) : 0;
+  const convertedPoints = useMemo(
+    () => points.map((p) => ({ date: p.date, value: ratePerGramForPurity(p.value, purity) })),
+    [points, purity],
+  );
+
+  const count = convertedPoints.length;
+  const min = count ? Math.min(...convertedPoints.map((p) => p.value)) : 0;
+  const max = count ? Math.max(...convertedPoints.map((p) => p.value)) : 0;
   const span = max - min || Math.abs(max) * 0.01 || 1;
 
   const innerWidth = Math.max(0, width - GUTTER_LEFT - PAD_RIGHT);
@@ -45,13 +88,30 @@ export function MetalChart({ label, points }: { label: string; points: Point[] }
   const yAt = (value: number) => PAD_TOP + (1 - (value - min) / span) * innerHeight;
 
   const ticks = [max, (min + max) / 2, min];
-  const last = count ? points[count - 1] : null;
-  const hovered = hoverIndex !== null ? points[hoverIndex] : null;
+  const last = count ? convertedPoints[count - 1] : null;
+  const hovered = hoverIndex !== null ? convertedPoints[hoverIndex] : null;
+  const currentTitle = titles.find((t) => t.purity_per_mille === purity);
 
   return (
     <div className="flex flex-col gap-1 px-5 py-4">
-      <div className="flex items-baseline justify-between gap-4">
-        <span className="text-body font-medium">{label}</span>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
+        <div className="flex items-baseline gap-3">
+          <span className="text-body font-medium">{label}</span>
+          {titles.length > 0 && (
+            <select
+              value={purity}
+              onChange={(e) => selectPurity(Number(e.target.value))}
+              className="h-7 rounded-pill border border-hairline bg-paper px-2 text-caption text-mid-gray outline-none focus:border-ink"
+              aria-label={`Titre affiché pour ${label}`}
+            >
+              {titles.map((t) => (
+                <option key={t.purity_per_mille} value={t.purity_per_mille}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
         {last && (
           <span className="tabular text-[13px] text-mid-gray">
             {formatEUR(last.value)} /g · {last.date}
@@ -73,7 +133,7 @@ export function MetalChart({ label, points }: { label: string; points: Point[] }
             height={HEIGHT}
             viewBox={`0 0 ${width} ${HEIGHT}`}
             role="img"
-            aria-label={`Courbe du cours — ${label}`}
+            aria-label={`Courbe du cours — ${label}${currentTitle ? ` · ${currentTitle.label}` : ""}`}
             onPointerMove={(event) => {
               if (count < 2) return;
               const rect = event.currentTarget.getBoundingClientRect();
@@ -109,7 +169,9 @@ export function MetalChart({ label, points }: { label: string; points: Point[] }
 
             {count >= 2 && (
               <polyline
-                points={points.map((p, i) => `${xAt(i).toFixed(1)},${yAt(p.value).toFixed(1)}`).join(" ")}
+                points={convertedPoints
+                  .map((p, i) => `${xAt(i).toFixed(1)},${yAt(p.value).toFixed(1)}`)
+                  .join(" ")}
                 fill="none"
                 className="stroke-ink"
                 strokeWidth="1.5"
@@ -173,8 +235,8 @@ export function MetalChart({ label, points }: { label: string; points: Point[] }
           className="tabular flex justify-between text-caption text-mid-gray"
           style={{ paddingLeft: GUTTER_LEFT, paddingRight: PAD_RIGHT }}
         >
-          <span>{points[0]?.date ?? ""}</span>
-          <span>{count > 2 ? points[Math.floor(count / 2)]?.date : ""}</span>
+          <span>{convertedPoints[0]?.date ?? ""}</span>
+          <span>{count > 2 ? convertedPoints[Math.floor(count / 2)]?.date : ""}</span>
           <span>{count > 1 ? last?.date : ""}</span>
         </div>
       )}
