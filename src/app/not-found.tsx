@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { buttonPrimary } from "@/components/ui";
-import { MAISON } from "@/lib/constants";
+import { getMaison } from "@/lib/maison";
 
-export default function NotFound() {
+export default async function NotFound() {
+  const maison = await getMaison();
   return (
     <main className="grid min-h-screen place-items-center bg-canvas px-6">
       <div className="flex w-full max-w-md flex-col gap-6 rounded-card border border-hairline bg-paper p-8 shadow-card">
@@ -24,7 +25,7 @@ export default function NotFound() {
         </div>
 
         <p className="border-t border-hairline pt-4 text-caption text-mid-gray">
-          {MAISON.legalName} · {MAISON.street}, {MAISON.postalCode} {MAISON.city}
+          {maison.legalName} · {maison.street}, {maison.postalCode} {maison.city}
         </p>
       </div>
     </main>

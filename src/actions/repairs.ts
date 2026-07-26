@@ -6,6 +6,7 @@ import { requirePermission } from "@/actions/auth-guard";
 import { logActivity } from "@/actions/activity";
 import { sendEmail, notifyAdmin } from "@/lib/email/resend";
 import { repairReadyEmail, repairReceivedEmail } from "@/lib/email/templates";
+import { getMaison } from "@/lib/maison";
 import { PERMISSIONS } from "@/lib/permissions";
 import { REPAIR_COLUMNS } from "@/lib/constants";
 import { actionError, type ActionResult } from "@/actions/types";
@@ -79,7 +80,7 @@ export async function createRepairTicket(
     });
 
     if (customer?.email && !customer.is_anonymized) {
-      const mail = repairReceivedEmail({
+      const mail = repairReceivedEmail(await getMaison(), {
         customerName: customer.full_name ?? "",
         ref: ticket.ref,
         description: ticket.description,
@@ -144,7 +145,7 @@ export async function updateRepairStatus(
     });
 
     if (newStatus === "ready" && row.customer_email) {
-      const mail = repairReadyEmail({
+      const mail = repairReadyEmail(await getMaison(), {
         customerName: row.customer_name ?? "",
         ref: row.ticket_ref,
         description: "",

@@ -5,6 +5,7 @@ import { requirePermission } from "@/actions/auth-guard";
 import { logActivity } from "@/actions/activity";
 import { isEmailConfigured, sendEmail } from "@/lib/email/resend";
 import { rgpdReceiptEmail } from "@/lib/email/templates";
+import { getMaison } from "@/lib/maison";
 import { ANONYMIZED_NAME, RGPD_CONFIRMATION_WORD } from "@/lib/constants";
 import { PERMISSIONS } from "@/lib/permissions";
 import { actionError, type ActionResult } from "@/actions/types";
@@ -51,7 +52,7 @@ export async function anonymizeCustomer(
         receiptNote =
           "Reçu non envoyé : aucun fournisseur e-mail configuré au moment de l'opération";
       } else {
-        const mail = rgpdReceiptEmail({ customerName: customer.full_name ?? "" });
+        const mail = rgpdReceiptEmail(await getMaison(), { customerName: customer.full_name ?? "" });
         try {
           await sendEmail({ to: customer.email, ...mail });
           receiptSentAt = new Date().toISOString();

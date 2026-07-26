@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { getMaison } from "@/lib/maison";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -12,10 +13,13 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: "Maison Piron — ERP",
-  description: "ERP et point de vente de la Maison Piron, Liège",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const maison = await getMaison();
+  return {
+    title: `${maison.displayName} — ERP`,
+    description: `ERP et point de vente · ${maison.displayName}, ${maison.city}`,
+  };
+}
 
 export default function RootLayout({
   children,

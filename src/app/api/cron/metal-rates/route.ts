@@ -1,6 +1,11 @@
 import { createServiceClient } from "@/lib/supabase/server";
 import { syncMetalRates } from "@/lib/metals/sync";
+import { generateDailyBrief } from "@/lib/metals/brief";
 import { notifyAdmin } from "@/lib/email/resend";
+
+// Le brief NVIDIA (retry + fallback modèle) peut dépasser largement la limite
+// par défaut d'une Function Vercel ; la sync des cours reste rapide.
+export const maxDuration = 300;
 
 export async function GET(request: Request) {
   // Un secret vide rendrait l'endpoint ouvert à « Bearer  » : on refuse net.
@@ -35,6 +40,14 @@ export async function GET(request: Request) {
     );
   }
 
+  // Le brief du matin ne doit jamais faire échouer la synchronisation des cours.
+  let brief: { generated: boolean; reason?: string };
+  try {
+    brief = await generateDailyBrief(supabase);
+  } catch (error) {
+    brief = { generated: false, reason: error instanceof Error ? error.message : String(error) };
+  }
+
   return Response.json(
     {
       ok: outcome.status !== "echec",
@@ -43,6 +56,7 @@ export async function GET(request: Request) {
       ratesUpserted: outcome.ratesUpserted,
       missing: outcome.missing,
       durationMs: outcome.durationMs,
+      brief,
     },
     { status: outcome.status === "echec" ? 502 : 200 },
   );

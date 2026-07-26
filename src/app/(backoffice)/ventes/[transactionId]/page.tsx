@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getStaffSession } from "@/actions/auth-guard";
+import { getMaison } from "@/lib/maison";
 import { emitInvoice, recordPayment, returnSoldItem } from "@/actions/transactions";
 import { ActionButton } from "@/components/action-button";
 import { ActionForm } from "@/components/action-form";
@@ -19,7 +20,6 @@ import {
 import {
   formatEUR,
   INVOICE_LEGAL_NOTICE,
-  MAISON,
   PAYMENT_METHOD_LABELS,
   TRANSACTION_STATUS_LABELS,
 } from "@/lib/constants";
@@ -32,7 +32,7 @@ export default async function SalePage({
   params: Promise<{ transactionId: string }>;
 }) {
   const { transactionId } = await params;
-  const session = await getStaffSession();
+  const [session, maison] = await Promise.all([getStaffSession(), getMaison()]);
   if (!session) return null;
 
   const { data: sale } = await session.supabase
@@ -65,7 +65,7 @@ export default async function SalePage({
   return (
     <>
       <PageHeader
-        breadcrumb={["Maison Piron", "Ventes", sale.ref ?? "Brouillon"]}
+        breadcrumb={[maison.displayName, "Ventes", sale.ref ?? "Brouillon"]}
         title={sale.ref ?? "Vente en brouillon"}
         aside={
           <>
@@ -236,8 +236,8 @@ export default async function SalePage({
             <Card title="Mentions légales">
               <div className="flex flex-col gap-2 p-5 text-caption text-mid-gray">
                 <span>
-                  {MAISON.legalName}, {MAISON.street}, {MAISON.postalCode} {MAISON.city} ·{" "}
-                  {MAISON.vatNumber}
+                  {maison.legalName}, {maison.street}, {maison.postalCode} {maison.city} ·{" "}
+                  {maison.vatNumber}
                 </span>
                 <span>{INVOICE_LEGAL_NOTICE}</span>
               </div>

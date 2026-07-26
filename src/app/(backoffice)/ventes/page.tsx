@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getStaffSession } from "@/actions/auth-guard";
+import { getMaison } from "@/lib/maison";
 import {
   Badge,
   Card,
@@ -24,7 +25,7 @@ export default async function VentesPage({
   searchParams: Promise<{ statut?: string }>;
 }) {
   const { statut } = await searchParams;
-  const session = await getStaffSession();
+  const [session, maison] = await Promise.all([getStaffSession(), getMaison()]);
   if (!session) return null;
 
   let query = session.supabase
@@ -51,7 +52,7 @@ export default async function VentesPage({
   return (
     <>
       <PageHeader
-        breadcrumb={["Maison Piron", "Boutique", "Ventes"]}
+        breadcrumb={[maison.displayName, "Boutique", "Ventes"]}
         title="Ventes & factures"
         aside={
           canSell ? (

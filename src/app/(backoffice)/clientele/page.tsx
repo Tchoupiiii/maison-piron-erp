@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getStaffSession } from "@/actions/auth-guard";
+import { getMaison } from "@/lib/maison";
 import { createCustomer } from "@/actions/customers";
 import { ActionForm } from "@/components/action-form";
 import {
@@ -24,7 +25,7 @@ export default async function ClientelePage({
   searchParams: Promise<{ q?: string; nouveau?: string }>;
 }) {
   const { q, nouveau } = await searchParams;
-  const session = await getStaffSession();
+  const [session, maison] = await Promise.all([getStaffSession(), getMaison()]);
   if (!session) return null;
 
   let query = session.supabase
@@ -61,7 +62,7 @@ export default async function ClientelePage({
   return (
     <>
       <PageHeader
-        breadcrumb={["Maison Piron", "Boutique", "Clientèle"]}
+        breadcrumb={[maison.displayName, "Boutique", "Clientèle"]}
         title="Clientèle"
         aside={
           canCreate ? (

@@ -70,6 +70,29 @@ export async function createTerminal(
   }
 }
 
+/** Adaptateur FormData → updateTerminal, pour le formulaire de Réglages. */
+export async function updateTerminalForm(
+  terminalId: string,
+  formData: FormData,
+): Promise<ActionResult<{ id: string }>> {
+  const parsed = terminalSchema.omit({ code: true }).safeParse({
+    name: String(formData.get("name") ?? ""),
+    location: String(formData.get("location") ?? ""),
+    receiptFormat: String(formData.get("receiptFormat") ?? "thermique_80"),
+    scannerMode: String(formData.get("scannerMode") ?? "clavier"),
+  });
+
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: "Formulaire incomplet",
+      fieldErrors: z.flattenError(parsed.error).fieldErrors as Record<string, string[]>,
+    };
+  }
+
+  return updateTerminal(terminalId, parsed.data);
+}
+
 export async function updateTerminal(
   terminalId: string,
   input: Partial<z.input<typeof terminalSchema>> & { isActive?: boolean },

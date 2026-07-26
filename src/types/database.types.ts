@@ -183,6 +183,66 @@ export type Database = {
         }
         Relationships: []
       }
+      daily_market_brief: {
+        Row: {
+          body: string
+          brief_date: string
+          generated_at: string
+          model: string
+          source_data: Json
+        }
+        Insert: {
+          body: string
+          brief_date: string
+          generated_at?: string
+          model: string
+          source_data?: Json
+        }
+        Update: {
+          body?: string
+          brief_date?: string
+          generated_at?: string
+          model?: string
+          source_data?: Json
+        }
+        Relationships: []
+      }
+      maison_settings: {
+        Row: {
+          city: string
+          country: string
+          display_name: string
+          id: boolean
+          legal_name: string
+          postal_code: string
+          street: string
+          updated_at: string
+          vat_number: string
+        }
+        Insert: {
+          city: string
+          country: string
+          display_name: string
+          id?: boolean
+          legal_name: string
+          postal_code: string
+          street: string
+          updated_at?: string
+          vat_number: string
+        }
+        Update: {
+          city?: string
+          country?: string
+          display_name?: string
+          id?: boolean
+          legal_name?: string
+          postal_code?: string
+          street?: string
+          updated_at?: string
+          vat_number?: string
+        }
+        Relationships: []
+      }
       market_rates: {
         Row: {
           fetched_at: string
@@ -951,6 +1011,7 @@ export type Database = {
           note: string | null
           occurred_at: string
           product_id: string
+          source_item_id: string | null
           transaction_id: string | null
         }
         Insert: {
@@ -962,6 +1023,7 @@ export type Database = {
           note?: string | null
           occurred_at?: string
           product_id: string
+          source_item_id?: string | null
           transaction_id?: string | null
         }
         Update: {
@@ -973,6 +1035,7 @@ export type Database = {
           note?: string | null
           occurred_at?: string
           product_id?: string
+          source_item_id?: string | null
           transaction_id?: string | null
         }
         Relationships: [
@@ -988,6 +1051,13 @@ export type Database = {
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_movements_source_item_id_fkey"
+            columns: ["source_item_id"]
+            isOneToOne: false
+            referencedRelation: "transaction_items"
             referencedColumns: ["id"]
           },
           {
@@ -1194,6 +1264,27 @@ export type Database = {
         }
         Returns: undefined
       }
+      admin_update_maison_settings: {
+        Args: {
+          city_param: string
+          country_param: string
+          display_name_param: string
+          legal_name_param: string
+          postal_code_param: string
+          street_param: string
+          vat_number_param: string
+        }
+        Returns: undefined
+      }
+      admin_update_staff_identity: {
+        Args: {
+          email_param: string
+          full_name_param: string
+          target_user_id: string
+          username_param: string
+        }
+        Returns: undefined
+      }
       auth_email_for_username: {
         Args: { username_param: string }
         Returns: string
@@ -1273,6 +1364,7 @@ export type Database = {
         }
         Returns: number
       }
+      repriceable_product_ids: { Args: never; Returns: string[] }
       return_sold_item: {
         Args: { reason_param?: string; transaction_item_id_param: string }
         Returns: {
@@ -1346,6 +1438,7 @@ export type Database = {
         | "caisse_creee"
         | "caisse_modifiee"
         | "sync_metaux"
+        | "maison_modifiee"
       certificate_lab: "GIA" | "IGI" | "HRD" | "autre" | "aucun"
       contact_language: "fr" | "nl" | "en" | "de"
       gemstone_type:
@@ -1533,6 +1626,7 @@ export const Constants = {
         "caisse_creee",
         "caisse_modifiee",
         "sync_metaux",
+        "maison_modifiee",
       ],
       certificate_lab: ["GIA", "IGI", "HRD", "autre", "aucun"],
       contact_language: ["fr", "nl", "en", "de"],

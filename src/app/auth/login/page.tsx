@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { logActivity } from "@/actions/activity";
 import { buttonPrimary, inputClass } from "@/components/ui";
-import { MAISON } from "@/lib/constants";
+import { getMaison } from "@/lib/maison";
 
 /**
  * `next` vient de l'URL, donc de n'importe qui. Seul un chemin interne est
@@ -22,6 +22,7 @@ export default async function LoginPage({
   searchParams: Promise<{ next?: string; error?: string }>;
 }) {
   const { next, error } = await searchParams;
+  const maison = await getMaison();
 
   async function signIn(formData: FormData) {
     "use server";
@@ -64,7 +65,7 @@ export default async function LoginPage({
       >
         <div className="flex flex-col gap-1">
           <span className="text-caption uppercase tracking-[0.6px] text-mid-gray">
-            {MAISON.legalName}
+            {maison.legalName}
           </span>
           <h1 className="text-heading-sm font-semibold">Connexion boutique</h1>
         </div>

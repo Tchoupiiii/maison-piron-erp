@@ -6,6 +6,7 @@ import { requirePermission } from "@/actions/auth-guard";
 import { logActivity } from "@/actions/activity";
 import { sendEmail, notifyAdmin } from "@/lib/email/resend";
 import { invoiceEmail } from "@/lib/email/templates";
+import { getMaison } from "@/lib/maison";
 import { INVOICE_DUE_DAYS, formatEUR } from "@/lib/constants";
 import { PERMISSIONS } from "@/lib/permissions";
 import { actionError, type ActionResult } from "@/actions/types";
@@ -138,7 +139,7 @@ export async function emitInvoice(
     });
 
     if (row.customer_email) {
-      const mail = invoiceEmail({
+      const mail = invoiceEmail(await getMaison(), {
         customerName: row.customer_name ?? "",
         ref: row.ref,
         totalAmount: row.total_amount,

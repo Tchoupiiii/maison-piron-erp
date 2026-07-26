@@ -6,10 +6,10 @@ import { buttonGhost } from "@/components/ui";
 import {
   formatEUR,
   INVOICE_LEGAL_NOTICE,
-  MAISON,
   PAYMENT_METHOD_LABELS,
   VAT_RATE,
 } from "@/lib/constants";
+import { getMaison } from "@/lib/maison";
 
 export default async function TicketPage({
   params,
@@ -17,7 +17,7 @@ export default async function TicketPage({
   params: Promise<{ transactionId: string }>;
 }) {
   const { transactionId } = await params;
-  const session = await getStaffSession();
+  const [session, maison] = await Promise.all([getStaffSession(), getMaison()]);
   if (!session) return null;
 
   const { data: sale } = await session.supabase
@@ -45,11 +45,11 @@ export default async function TicketPage({
 
       <article className="w-[302px] bg-paper p-5 text-ink print:w-full print:p-0">
         <header className="flex flex-col items-center gap-1 border-b border-dashed border-hairline pb-3 text-center">
-          <span className="text-body font-medium">{MAISON.legalName}</span>
+          <span className="text-body font-medium">{maison.legalName}</span>
           <span className="text-caption text-mid-gray">
-            {MAISON.street} · {MAISON.postalCode} {MAISON.city}
+            {maison.street} · {maison.postalCode} {maison.city}
           </span>
-          <span className="tabular text-caption text-mid-gray">{MAISON.vatNumber}</span>
+          <span className="tabular text-caption text-mid-gray">{maison.vatNumber}</span>
         </header>
 
         <div className="flex flex-col gap-1 border-b border-dashed border-hairline py-3 text-caption">

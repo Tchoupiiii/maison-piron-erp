@@ -79,6 +79,7 @@ export const ACTIVITY_LABELS: Record<string, string> = {
   permission_modifiee: "Permission modifiée",
   caisse_creee: "Caisse créée",
   caisse_modifiee: "Caisse modifiée",
+  maison_modifiee: "Identité de la maison modifiée",
   sync_metaux: "Synchronisation des cours",
 };
 

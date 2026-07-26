@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getStaffSession } from "@/actions/auth-guard";
+import { getMaison } from "@/lib/maison";
 import {
   deleteGemstoneCertificate,
   deleteProduct,
@@ -40,7 +41,7 @@ export default async function ProductPage({
   params: Promise<{ productId: string }>;
 }) {
   const { productId } = await params;
-  const session = await getStaffSession();
+  const [session, maison] = await Promise.all([getStaffSession(), getMaison()]);
   if (!session) return null;
 
   const { data: product } = await session.supabase
@@ -139,7 +140,7 @@ export default async function ProductPage({
   return (
     <>
       <PageHeader
-        breadcrumb={["Maison Piron", "Inventaire", product.sku]}
+        breadcrumb={[maison.displayName, "Inventaire", product.sku]}
         title={product.name}
         aside={
           <>

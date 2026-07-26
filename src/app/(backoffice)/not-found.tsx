@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { PageHeader, Section, buttonPrimary } from "@/components/ui";
+import { getMaison } from "@/lib/maison";
 
-export default function BackofficeNotFound() {
+export default async function BackofficeNotFound() {
+  const maison = await getMaison();
   return (
     <>
-      <PageHeader breadcrumb={["Maison Piron", "Erreur 404"]} title="Page introuvable" />
+      <PageHeader breadcrumb={[maison.displayName, "Erreur 404"]} title="Page introuvable" />
       <Section>
         <div className="flex max-w-lg flex-col gap-4 rounded-card border border-hairline bg-paper p-5 shadow-card">
           <p className="text-body text-mid-gray">

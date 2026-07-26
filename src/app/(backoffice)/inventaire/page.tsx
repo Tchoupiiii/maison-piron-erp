@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getStaffSession } from "@/actions/auth-guard";
+import { getMaison } from "@/lib/maison";
 import { createProduct } from "@/actions/products";
 import { ActionForm } from "@/components/action-form";
 import {
@@ -35,7 +36,7 @@ export default async function InventairePage({
   searchParams: Promise<{ q?: string; statut?: string; nouveau?: string }>;
 }) {
   const { q, statut, nouveau } = await searchParams;
-  const session = await getStaffSession();
+  const [session, maison] = await Promise.all([getStaffSession(), getMaison()]);
   if (!session) return null;
 
   let query = session.supabase
@@ -95,7 +96,7 @@ export default async function InventairePage({
   return (
     <>
       <PageHeader
-        breadcrumb={["Maison Piron", "Boutique", "Inventaire"]}
+        breadcrumb={[maison.displayName, "Boutique", "Inventaire"]}
         title="Inventaire"
         aside={
           canCreate ? (

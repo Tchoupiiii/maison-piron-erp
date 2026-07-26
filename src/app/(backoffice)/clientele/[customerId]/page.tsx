@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getStaffSession } from "@/actions/auth-guard";
+import { getMaison } from "@/lib/maison";
 import { deleteCustomer, updateCustomer, updateCustomerPreferences } from "@/actions/customers";
 import { ActionButton } from "@/components/action-button";
 import { ActionForm } from "@/components/action-form";
@@ -29,7 +30,7 @@ export default async function CustomerPage({
   params: Promise<{ customerId: string }>;
 }) {
   const { customerId } = await params;
-  const session = await getStaffSession();
+  const [session, maison] = await Promise.all([getStaffSession(), getMaison()]);
   if (!session) return null;
 
   const { data: customer } = await session.supabase
@@ -102,7 +103,7 @@ export default async function CustomerPage({
   return (
     <>
       <PageHeader
-        breadcrumb={["Maison Piron", "Clientèle", customer.full_name ?? "Fiche"]}
+        breadcrumb={[maison.displayName, "Clientèle", customer.full_name ?? "Fiche"]}
         title={customer.full_name ?? "Client anonymisé"}
         aside={
           <>

@@ -180,19 +180,20 @@ export async function recalculatePricesForRateChange(): Promise<
   try {
     const session = await requirePermission(PERMISSIONS.metauxRecalculer);
 
-    const { data: products, error } = await session.supabase
-      .from("products")
-      .select("id")
-      .in("status", ["en_stock", "reserve"]);
+    // Seules les pièces dont l'étiquette repose sur un cours dépassé : recalculer
+    // tout le stock gonflerait price_history de lignes identiques.
+    const { data: productIds, error } = await session.supabase.rpc(
+      "repriceable_product_ids",
+    );
 
     if (error) return { ok: false, error: error.message };
 
     let updatedCount = 0;
     let failedCount = 0;
 
-    for (const product of products ?? []) {
+    for (const productId of productIds ?? []) {
       try {
-        await computeAndPersist(session, product.id, "sync_cours");
+        await computeAndPersist(session, productId, "sync_cours");
         updatedCount++;
       } catch {
         failedCount++;

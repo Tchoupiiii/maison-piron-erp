@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getStaffSession } from "@/actions/auth-guard";
 import { SignOutButton } from "@/components/sign-out-button";
-import { MAISON } from "@/lib/constants";
+import { getMaison } from "@/lib/maison";
 
 /**
  * Chrome tactile du point de vente : pas de sidebar, cibles ≥44 px.
@@ -16,7 +16,7 @@ export default async function PosLayout({
   // Une session Supabase ne suffit pas : il faut une fiche employé active, comme
   // au back-office. La RLS refuserait déjà les données, mais autant le dire ici
   // plutôt que d'afficher une caisse vide.
-  const session = await getStaffSession();
+  const [session, maison] = await Promise.all([getStaffSession(), getMaison()]);
   if (!session) {
     return (
       <main className="grid min-h-screen place-items-center p-6">
@@ -37,7 +37,7 @@ export default async function PosLayout({
       <header className="flex items-center justify-between gap-4 border-b border-hairline px-6 py-4 print:hidden">
         <div className="flex flex-col">
           <span className="text-caption uppercase tracking-[0.6px] text-mid-gray">
-            {MAISON.legalName}
+            {maison.legalName}
           </span>
           <span className="text-heading-sm font-semibold">Point de vente</span>
         </div>

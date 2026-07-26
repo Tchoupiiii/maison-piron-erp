@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { getStaffSession } from "@/actions/auth-guard";
 import { PrintButton } from "@/components/print-button";
 import { buttonGhost } from "@/components/ui";
-import { CERTIFICATE_LAB_LABELS, GEMSTONE_TYPE_LABELS, MAISON } from "@/lib/constants";
+import { CERTIFICATE_LAB_LABELS, GEMSTONE_TYPE_LABELS } from "@/lib/constants";
+import { getMaison } from "@/lib/maison";
 
 /**
  * Document Maison Piron distinct du scan de labo : une mise en forme soignée
@@ -16,7 +17,7 @@ export default async function GemstoneCertificatePage({
   params: Promise<{ productId: string; gemstoneId: string }>;
 }) {
   const { productId, gemstoneId } = await params;
-  const session = await getStaffSession();
+  const [session, maison] = await Promise.all([getStaffSession(), getMaison()]);
   if (!session) return null;
 
   const { data: gemstone } = await session.supabase
@@ -38,11 +39,11 @@ export default async function GemstoneCertificatePage({
 
       <article className="w-[210mm] max-w-full bg-paper p-12 text-ink print:w-full print:p-0">
         <header className="flex flex-col items-center gap-1 border-b-2 border-ink pb-6 text-center">
-          <span className="text-heading-lg font-semibold">{MAISON.legalName}</span>
+          <span className="text-heading-lg font-semibold">{maison.legalName}</span>
           <span className="text-body text-mid-gray">
-            {MAISON.street} · {MAISON.postalCode} {MAISON.city} · {MAISON.country}
+            {maison.street} · {maison.postalCode} {maison.city} · {maison.country}
           </span>
-          <span className="tabular text-caption text-mid-gray">{MAISON.vatNumber}</span>
+          <span className="tabular text-caption text-mid-gray">{maison.vatNumber}</span>
         </header>
 
         <h1 className="pt-8 text-center text-heading font-semibold">
@@ -96,7 +97,7 @@ export default async function GemstoneCertificatePage({
         <footer className="mt-12 border-t border-hairline pt-6 text-caption text-mid-gray">
           <p>
             Ce document décrit les caractéristiques gemmologiques telles qu&apos;enregistrées
-            par Maison Piron SRL. Il ne remplace pas le certificat original du laboratoire
+            par {maison.legalName}. Il ne remplace pas le certificat original du laboratoire
             mentionné ci-dessus, disponible sur demande.
           </p>
         </footer>

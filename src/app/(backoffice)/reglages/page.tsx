@@ -7,8 +7,11 @@ import {
   revokeStaffSessions,
   setStaffActive,
   setStaffRole,
+  updateStaffIdentity,
 } from "@/actions/staff";
-import { createTerminal, updateTerminal } from "@/actions/terminals";
+import { createTerminal, updateTerminal, updateTerminalForm } from "@/actions/terminals";
+import { updateMaisonSettings } from "@/actions/maison";
+import { getMaison } from "@/lib/maison";
 import { ActionButton } from "@/components/action-button";
 import { ActionForm } from "@/components/action-form";
 import {
@@ -39,6 +42,7 @@ const TABS = [
   { key: "employes", label: "Employés" },
   { key: "permissions", label: "Permissions" },
   { key: "caisses", label: "Caisses" },
+  { key: "maison", label: "Maison" },
   { key: "journal", label: "Journal d'activité" },
   { key: "sessions", label: "Sessions actives" },
 ] as const;
@@ -91,10 +95,12 @@ export default async function ReglagesPage({
     });
   }
 
+  const maison = await getMaison();
+
   return (
     <>
       <PageHeader
-        breadcrumb={["Maison Piron", "Système", "Réglages"]}
+        breadcrumb={[maison.displayName, "Système", "Réglages"]}
         title="Réglages"
       />
 
@@ -116,6 +122,7 @@ export default async function ReglagesPage({
         )}
         {tab === "permissions" && <PermissionsTab session={session} staff={staff ?? []} />}
         {tab === "caisses" && <TerminalsTab session={session} submitTerminal={submitTerminal} />}
+        {tab === "maison" && <MaisonTab session={session} />}
         {tab === "journal" && (
           <ActivityTab session={session} acteur={acteur} action={action} staff={staff ?? []} />
         )}
@@ -154,59 +161,111 @@ async function EmployeesTab({
       <Card title="Équipe" subtitle={`${staff.length} compte(s)`}>
         <div className="flex flex-col">
           {staff.map((person) => (
-            <div
-              key={person.id}
-              className="grid grid-cols-[1fr_auto] items-center gap-4 border-b border-canvas px-5 py-4 last:border-b-0"
-            >
-              <div className="flex min-w-0 flex-col gap-1">
-                <span className="flex items-center gap-2 text-body font-medium">
-                  {person.full_name}
-                  <Badge tone={person.role === "admin" ? "solid" : "neutral"}>
-                    {STAFF_ROLE_LABELS[person.role]}
-                  </Badge>
-                  {!person.is_active && <Badge tone="danger">Désactivé</Badge>}
-                  {person.id === session.userId && <Badge>Vous</Badge>}
-                </span>
-                <span className="truncate text-[13px] text-mid-gray">
-                  {person.username
-                    ? `identifiant ${person.username}${person.email ? ` · ${person.email}` : ""}`
-                    : (person.email ?? "identifiant inconnu")}
-                </span>
+            <div key={person.id} className="border-b border-canvas last:border-b-0">
+              <div className="grid grid-cols-[1fr_auto] items-center gap-4 px-5 py-4">
+                <div className="flex min-w-0 flex-col gap-1">
+                  <span className="flex items-center gap-2 text-body font-medium">
+                    {person.full_name}
+                    <Badge tone={person.role === "admin" ? "solid" : "neutral"}>
+                      {STAFF_ROLE_LABELS[person.role]}
+                    </Badge>
+                    {!person.is_active && <Badge tone="danger">Désactivé</Badge>}
+                    {person.id === session.userId && <Badge>Vous</Badge>}
+                  </span>
+                  <span className="truncate text-[13px] text-mid-gray">
+                    {person.username
+                      ? `identifiant ${person.username}${person.email ? ` · ${person.email}` : ""}`
+                      : (person.email ?? "identifiant inconnu")}
+                  </span>
+                </div>
+
+                {canManage && person.id !== session.userId && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    {(["admin", "gemmologue", "vendeuse"] as StaffRole[])
+                      .filter((role) => role !== person.role)
+                      .map((role) => (
+                        <ActionButton
+                          key={role}
+                          action={setStaffRole.bind(null, person.id, role)}
+                          className={`${buttonGhost} h-8 min-h-8 text-[13px]`}
+                        >
+                          → {STAFF_ROLE_LABELS[role]}
+                        </ActionButton>
+                      ))}
+                    <ActionButton
+                      action={revokeStaffSessions.bind(null, person.id)}
+                      className={`${buttonGhost} h-8 min-h-8 text-[13px]`}
+                    >
+                      Déconnecter
+                    </ActionButton>
+                    <ActionButton
+                      action={setStaffActive.bind(null, person.id, !person.is_active)}
+                      className={`${buttonGhost} h-8 min-h-8 text-[13px]`}
+                    >
+                      {person.is_active ? "Désactiver" : "Réactiver"}
+                    </ActionButton>
+                    <ActionButton
+                      action={deleteStaffAccount.bind(null, person.id)}
+                      className={`${buttonDanger} h-8 min-h-8 text-[13px]`}
+                      confirm={`Supprimer définitivement le compte de ${person.full_name} ? La désactivation conserve l'historique et coupe l'accès tout aussi vite.`}
+                    >
+                      Supprimer
+                    </ActionButton>
+                  </div>
+                )}
               </div>
 
-              {canManage && person.id !== session.userId && (
-                <div className="flex flex-wrap items-center gap-2">
-                  {(["admin", "gemmologue", "vendeuse"] as StaffRole[])
-                    .filter((role) => role !== person.role)
-                    .map((role) => (
-                      <ActionButton
-                        key={role}
-                        action={setStaffRole.bind(null, person.id, role)}
-                        className={`${buttonGhost} h-8 min-h-8 text-[13px]`}
-                      >
-                        → {STAFF_ROLE_LABELS[role]}
-                      </ActionButton>
-                    ))}
-                  <ActionButton
-                    action={revokeStaffSessions.bind(null, person.id)}
-                    className={`${buttonGhost} h-8 min-h-8 text-[13px]`}
+              {canManage && (
+                <details className="px-5 pb-4">
+                  <summary className="cursor-pointer text-[13px] text-mid-gray hover:text-ink">
+                    Modifier le nom ou l&apos;identifiant
+                  </summary>
+                  <ActionForm
+                    action={updateStaffIdentity.bind(null, person.id)}
+                    className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4"
+                    successMessage="Identité mise à jour."
                   >
-                    Déconnecter
-                  </ActionButton>
-                  <ActionButton
-                    action={setStaffActive.bind(null, person.id, !person.is_active)}
-                    className={`${buttonGhost} h-8 min-h-8 text-[13px]`}
-                  >
-                    {person.is_active ? "Désactiver" : "Réactiver"}
-                  </ActionButton>
-                  <ActionButton
-                    action={deleteStaffAccount.bind(null, person.id)}
-                    className={`${buttonDanger} h-8 min-h-8 text-[13px]`}
-                    confirm={`Supprimer définitivement le compte de ${person.full_name} ? La désactivation conserve l'historique et coupe l'accès tout aussi vite.`}
-                  >
-                    Supprimer
-                  </ActionButton>
-                </div>
+                    <label className="flex flex-col gap-1">
+                      <span className={labelClass}>Nom complet</span>
+                      <input
+                        name="fullName"
+                        required
+                        defaultValue={person.full_name}
+                        className={inputClass}
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1">
+                      <span className={labelClass}>Identifiant de connexion</span>
+                      <input
+                        name="username"
+                        required
+                        pattern="[a-zA-Z0-9._-]{3,32}"
+                        autoCapitalize="none"
+                        spellCheck={false}
+                        defaultValue={person.username ?? ""}
+                        className={inputClass}
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1">
+                      <span className={labelClass}>E-mail de contact (facultatif)</span>
+                      <input
+                        name="email"
+                        type="email"
+                        defaultValue={person.email ?? ""}
+                        className={inputClass}
+                      />
+                    </label>
+                    <div className="col-span-full flex items-center gap-4">
+                      <button type="submit" className={buttonGhost}>
+                        Enregistrer
+                      </button>
+                      <span className="text-caption text-mid-gray">
+                        Un nouvel identifiant prend effet à la prochaine connexion ; la
+                        session en cours n&apos;est pas coupée.
+                      </span>
+                    </div>
+                  </ActionForm>
+                </details>
               )}
             </div>
           ))}
@@ -360,30 +419,89 @@ async function TerminalsTab({
       <Card title="Caisses" subtitle={`${terminals?.length ?? 0} point(s) de vente`}>
         <div className="flex flex-col">
           {(terminals ?? []).map((terminal) => (
-            <div
-              key={terminal.id}
-              className="grid grid-cols-[1fr_auto] items-center gap-4 border-b border-canvas px-5 py-4 last:border-b-0"
-            >
-              <div className="flex min-w-0 flex-col gap-1">
-                <span className="flex items-center gap-2 text-body font-medium">
-                  {terminal.name}
-                  <Badge>{terminal.code}</Badge>
-                  {!terminal.is_active && <Badge tone="danger">Hors service</Badge>}
-                </span>
-                <span className="text-[13px] text-mid-gray">
-                  {terminal.location ?? "sans emplacement"} · ticket{" "}
-                  {terminal.receipt_format.replace("_", " ")} · scanner {terminal.scanner_mode}
-                </span>
+            <div key={terminal.id} className="border-b border-canvas last:border-b-0">
+              <div className="grid grid-cols-[1fr_auto] items-center gap-4 px-5 py-4">
+                <div className="flex min-w-0 flex-col gap-1">
+                  <span className="flex items-center gap-2 text-body font-medium">
+                    {terminal.name}
+                    <Badge>{terminal.code}</Badge>
+                    {!terminal.is_active && <Badge tone="danger">Hors service</Badge>}
+                  </span>
+                  <span className="text-[13px] text-mid-gray">
+                    {terminal.location ?? "sans emplacement"} · ticket{" "}
+                    {terminal.receipt_format.replace("_", " ")} · scanner {terminal.scanner_mode}
+                  </span>
+                </div>
+                {canManage && (
+                  <ActionButton
+                    action={updateTerminal.bind(null, terminal.id, {
+                      isActive: !terminal.is_active,
+                    })}
+                    className={`${buttonGhost} h-8 min-h-8 text-[13px]`}
+                  >
+                    {terminal.is_active ? "Mettre hors service" : "Remettre en service"}
+                  </ActionButton>
+                )}
               </div>
+
               {canManage && (
-                <ActionButton
-                  action={updateTerminal.bind(null, terminal.id, {
-                    isActive: !terminal.is_active,
-                  })}
-                  className={`${buttonGhost} h-8 min-h-8 text-[13px]`}
-                >
-                  {terminal.is_active ? "Mettre hors service" : "Remettre en service"}
-                </ActionButton>
+                <details className="px-5 pb-4">
+                  <summary className="cursor-pointer text-[13px] text-mid-gray hover:text-ink">
+                    Modifier la caisse
+                  </summary>
+                  <ActionForm
+                    action={updateTerminalForm.bind(null, terminal.id)}
+                    className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4"
+                    successMessage="Caisse mise à jour."
+                  >
+                    <label className="flex flex-col gap-1">
+                      <span className={labelClass}>Nom</span>
+                      <input
+                        name="name"
+                        required
+                        defaultValue={terminal.name}
+                        className={inputClass}
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1">
+                      <span className={labelClass}>Emplacement</span>
+                      <input
+                        name="location"
+                        defaultValue={terminal.location ?? ""}
+                        className={inputClass}
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1">
+                      <span className={labelClass}>Format de ticket</span>
+                      <select
+                        name="receiptFormat"
+                        defaultValue={terminal.receipt_format}
+                        className={selectClass}
+                      >
+                        <option value="thermique_80">Thermique 80 mm</option>
+                        <option value="thermique_58">Thermique 58 mm</option>
+                        <option value="a4">A4</option>
+                      </select>
+                    </label>
+                    <label className="flex flex-col gap-1">
+                      <span className={labelClass}>Scanner</span>
+                      <select
+                        name="scannerMode"
+                        defaultValue={terminal.scanner_mode}
+                        className={selectClass}
+                      >
+                        <option value="clavier">Code-barres, clavier (HID)</option>
+                        <option value="rfid">Lecteur RFID / NFC</option>
+                        <option value="camera">Caméra</option>
+                      </select>
+                    </label>
+                    <div className="col-span-full">
+                      <button type="submit" className={buttonGhost}>
+                        Enregistrer
+                      </button>
+                    </div>
+                  </ActionForm>
+                </details>
               )}
             </div>
           ))}
@@ -503,6 +621,93 @@ async function TerminalsTab({
             </p>
           </div>
         </div>
+      </Card>
+    </div>
+  );
+}
+
+async function MaisonTab({ session }: { session: Session }) {
+  if (session.role !== "admin") {
+    return (
+      <Card>
+        <EmptyState
+          title="Réservé aux administrateurs"
+          hint="Le nom de la maison et les mentions légales des factures ne se modifient que par un administrateur."
+        />
+      </Card>
+    );
+  }
+
+  const maison = await getMaison();
+
+  return (
+    <div className="flex flex-col gap-6">
+      <Notice>
+        Le nom d&apos;affichage apparaît partout dans l&apos;ERP. Les autres champs
+        alimentent les mentions légales des factures, tickets de caisse et
+        certificats — les documents déjà émis ne changent pas.
+      </Notice>
+
+      <Card title="Identité de la maison">
+        <ActionForm
+          action={updateMaisonSettings}
+          className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4 p-5"
+          successMessage="Identité enregistrée."
+        >
+          <label className="flex flex-col gap-1">
+            <span className={labelClass}>Nom d&apos;affichage</span>
+            <input
+              name="displayName"
+              required
+              defaultValue={maison.displayName}
+              className={inputClass}
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className={labelClass}>Raison sociale</span>
+            <input
+              name="legalName"
+              required
+              defaultValue={maison.legalName}
+              className={inputClass}
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className={labelClass}>Rue et numéro</span>
+            <input name="street" required defaultValue={maison.street} className={inputClass} />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className={labelClass}>Code postal</span>
+            <input
+              name="postalCode"
+              required
+              defaultValue={maison.postalCode}
+              className={inputClass}
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className={labelClass}>Ville</span>
+            <input name="city" required defaultValue={maison.city} className={inputClass} />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className={labelClass}>Pays</span>
+            <input name="country" required defaultValue={maison.country} className={inputClass} />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className={labelClass}>Numéro de TVA</span>
+            <input
+              name="vatNumber"
+              required
+              defaultValue={maison.vatNumber}
+              className={inputClass}
+            />
+          </label>
+          <div className="col-span-full">
+            <button type="submit" className={buttonPrimary}>
+              Enregistrer
+            </button>
+          </div>
+        </ActionForm>
       </Card>
     </div>
   );

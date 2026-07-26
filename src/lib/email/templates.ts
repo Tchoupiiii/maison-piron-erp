@@ -1,15 +1,16 @@
-import { MAISON, formatEUR } from "@/lib/constants";
+import { formatEUR } from "@/lib/constants";
+import type { Maison } from "@/lib/maison";
 
 const escapeHtml = (s: string) =>
   s.replace(/[&<>"']/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!,
   );
 
-function layout(body: string): string {
+function layout(maison: Maison, body: string): string {
   return `<div style="font-family:Helvetica,Arial,sans-serif;font-size:14px;line-height:1.5;color:#0a0a0a;max-width:560px">
 ${body}
 <p style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e5e5;font-size:12px;color:#737373">
-${MAISON.legalName} · ${MAISON.street}, ${MAISON.postalCode} ${MAISON.city} · ${MAISON.vatNumber}
+${maison.legalName} · ${maison.street}, ${maison.postalCode} ${maison.city} · ${maison.vatNumber}
 </p>
 </div>`;
 }
@@ -17,13 +18,16 @@ ${MAISON.legalName} · ${MAISON.street}, ${MAISON.postalCode} ${MAISON.city} · 
 const formatDate = (iso: string) =>
   new Intl.DateTimeFormat("fr-BE", { dateStyle: "long" }).format(new Date(iso));
 
-export function repairReceivedEmail(args: {
-  customerName: string;
-  ref: string;
-  description: string;
-  deadline: string | null;
-  estimatedPrice: number | null;
-}) {
+export function repairReceivedEmail(
+  maison: Maison,
+  args: {
+    customerName: string;
+    ref: string;
+    description: string;
+    deadline: string | null;
+    estimatedPrice: number | null;
+  },
+) {
   const lines = [
     `<p>Bonjour ${escapeHtml(args.customerName)},</p>`,
     `<p>Nous avons bien réceptionné votre bijou à l'atelier. Votre dossier porte la référence <strong>${escapeHtml(args.ref)}</strong>.</p>`,
@@ -40,34 +44,41 @@ export function repairReceivedEmail(args: {
 
   return {
     subject: `Réception de votre bijou · ${args.ref}`,
-    html: layout(lines.join("\n")),
+    html: layout(maison, lines.join("\n")),
   };
 }
 
-export function repairReadyEmail(args: {
-  customerName: string;
-  ref: string;
-  description: string;
-}) {
+export function repairReadyEmail(
+  maison: Maison,
+  args: {
+    customerName: string;
+    ref: string;
+    description: string;
+  },
+) {
   return {
     subject: `Votre bijou est prêt · ${args.ref}`,
     html: layout(
+      maison,
       [
         `<p>Bonjour ${escapeHtml(args.customerName)},</p>`,
         `<p>Votre bijou est prêt et vous attend en boutique.</p>`,
         `<p style="padding:12px;background:#f5f5f5;border-radius:8px">${escapeHtml(args.description)}<br><span style="color:#737373">Réf. ${escapeHtml(args.ref)}</span></p>`,
-        `<p>Vous pouvez passer le récupérer ${MAISON.street}, aux heures d'ouverture de la boutique.</p>`,
+        `<p>Vous pouvez passer le récupérer ${maison.street}, aux heures d'ouverture de la boutique.</p>`,
       ].join("\n"),
     ),
   };
 }
 
-export function invoiceEmail(args: {
-  customerName: string;
-  ref: string;
-  totalAmount: number;
-  dueAt: string | null;
-}) {
+export function invoiceEmail(
+  maison: Maison,
+  args: {
+    customerName: string;
+    ref: string;
+    totalAmount: number;
+    dueAt: string | null;
+  },
+) {
   const lines = [
     `<p>Bonjour ${escapeHtml(args.customerName)},</p>`,
     `<p>Veuillez trouver ci-joint votre facture <strong>${escapeHtml(args.ref)}</strong> d'un montant de <strong>${formatEUR(args.totalAmount)}</strong> TTC.</p>`,
@@ -78,16 +89,17 @@ export function invoiceEmail(args: {
   lines.push(`<p>Nous vous remercions de votre confiance.</p>`);
 
   return {
-    subject: `Facture ${args.ref} · ${MAISON.legalName}`,
-    html: layout(lines.join("\n")),
+    subject: `Facture ${args.ref} · ${maison.legalName}`,
+    html: layout(maison, lines.join("\n")),
   };
 }
 
 /** Reçu d'exécution art. 17 — envoyé avant l'effacement des coordonnées. */
-export function rgpdReceiptEmail(args: { customerName: string }) {
+export function rgpdReceiptEmail(maison: Maison, args: { customerName: string }) {
   return {
     subject: "Confirmation d'anonymisation de vos données",
     html: layout(
+      maison,
       [
         `<p>Bonjour ${escapeHtml(args.customerName)},</p>`,
         `<p>Conformément à votre demande et à l'article 17 du RGPD, vos données personnelles ont été effacées de nos systèmes : nom, adresse e-mail, numéro de téléphone, adresse postale et préférences.</p>`,

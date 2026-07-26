@@ -121,6 +121,82 @@ export async function createStaffAccount(
   }
 }
 
+const updateStaffIdentitySchema = createStaffSchema.pick({
+  username: true,
+  email: true,
+  fullName: true,
+});
+
+/**
+ * Nom, identifiant et e-mail de contact. Tout passe par la fonction SQL
+ * `admin_update_staff_identity` : staff_profiles n'a aucune policy d'écriture,
+ * et l'adresse technique de connexion (identifiant@maison-piron.invalid) doit
+ * suivre l'identifiant dans auth.users, ce que seule la base peut garantir
+ * atomiquement.
+ */
+export async function updateStaffIdentity(
+  staffId: string,
+  formData: FormData,
+): Promise<ActionResult<{ id: string }>> {
+  const parsed = updateStaffIdentitySchema.safeParse({
+    username: String(formData.get("username") ?? ""),
+    email: String(formData.get("email") ?? ""),
+    fullName: String(formData.get("fullName") ?? ""),
+  });
+
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: "Formulaire incomplet",
+      fieldErrors: z.flattenError(parsed.error).fieldErrors as Record<string, string[]>,
+    };
+  }
+
+  try {
+    const session = await requirePermission(PERMISSIONS.systemeEmployes);
+    const d = parsed.data;
+
+    const { data: before } = await session.supabase
+      .from("staff_profiles")
+      .select("full_name, username, email")
+      .eq("id", staffId)
+      .single();
+
+    const { error } = await session.supabase.rpc("admin_update_staff_identity", {
+      target_user_id: staffId,
+      full_name_param: d.fullName,
+      username_param: d.username,
+      email_param: d.email || "",
+    });
+
+    if (error) return { ok: false, error: actionError(error) };
+
+    await logActivity(session, {
+      action: "employe_modifie",
+      summary:
+        before?.username && before.username !== d.username
+          ? `Identité de ${before?.full_name ?? "l'employé"} mise à jour · identifiant ${before.username} → ${d.username}`
+          : `Identité de ${before?.full_name ?? "l'employé"} mise à jour`,
+      entityType: "staff",
+      entityId: staffId,
+      entityLabel: d.fullName,
+      changes: {
+        avant: {
+          nom: before?.full_name ?? null,
+          identifiant: before?.username ?? null,
+          email: before?.email ?? null,
+        },
+        apres: { nom: d.fullName, identifiant: d.username, email: d.email || null },
+      },
+    });
+
+    revalidatePath("/reglages");
+    return { ok: true, data: { id: staffId } };
+  } catch (error) {
+    return { ok: false, error: actionError(error) };
+  }
+}
+
 export async function setStaffRole(
   staffId: string,
   role: StaffRole,

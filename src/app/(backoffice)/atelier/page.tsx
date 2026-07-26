@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getStaffSession } from "@/actions/auth-guard";
+import { getMaison } from "@/lib/maison";
 import { createRepairTicket, updateRepairStatus } from "@/actions/repairs";
 import { ActionButton } from "@/components/action-button";
 import { ActionForm } from "@/components/action-form";
@@ -30,7 +31,7 @@ export default async function AtelierPage({
   searchParams: Promise<{ nouveau?: string }>;
 }) {
   const { nouveau } = await searchParams;
-  const session = await getStaffSession();
+  const [session, maison] = await Promise.all([getStaffSession(), getMaison()]);
   if (!session) return null;
 
   const today = new Date().toISOString().slice(0, 10);
@@ -72,7 +73,7 @@ export default async function AtelierPage({
   return (
     <>
       <PageHeader
-        breadcrumb={["Maison Piron", "Boutique", "Atelier"]}
+        breadcrumb={[maison.displayName, "Boutique", "Atelier"]}
         title="Atelier"
         aside={
           canCreate ? (
