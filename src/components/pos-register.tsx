@@ -67,6 +67,41 @@ export function PosRegister({
     };
   }, [cartRef]);
 
+  /**
+   * Un scanner tape le code puis Entrée tout seul, sans clic. Ça marche déjà
+   * quand le focus est resté dans le champ de recherche, mais un clic ailleurs
+   * (client, remise, panier) fait perdre ce focus et les caractères partent
+   * dans le vide. Cette écoute globale rattrape ce cas : tant que le focus
+   * n'est pas sur un champ de saisie normal, elle capte les frappes ailleurs
+   * sur l'écran et déclenche le scan au Entrée.
+   */
+  useEffect(() => {
+    let buffer = "";
+    function onKeyDown(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null;
+      const isFormField =
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement;
+      if (isFormField) return;
+
+      if (event.key === "Enter") {
+        if (buffer.trim()) {
+          event.preventDefault();
+          scan(buffer);
+        }
+        buffer = "";
+        return;
+      }
+      if (event.key.length === 1) {
+        buffer += event.key;
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cartRef, pending]);
+
   const filtered = useMemo(() => {
     const needle = search.trim().toLowerCase();
     if (!needle) return products;
