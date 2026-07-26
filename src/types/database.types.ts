@@ -498,6 +498,7 @@ export type Database = {
       product_media: {
         Row: {
           created_at: string
+          gemstone_id: string | null
           id: string
           media_type: Database["public"]["Enums"]["media_type"]
           position: number
@@ -506,6 +507,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          gemstone_id?: string | null
           id?: string
           media_type: Database["public"]["Enums"]["media_type"]
           position?: number
@@ -514,6 +516,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          gemstone_id?: string | null
           id?: string
           media_type?: Database["public"]["Enums"]["media_type"]
           position?: number
@@ -521,6 +524,13 @@ export type Database = {
           storage_path?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "product_media_gemstone_id_fkey"
+            columns: ["gemstone_id"]
+            isOneToOne: false
+            referencedRelation: "product_gemstones"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "product_media_product_id_fkey"
             columns: ["product_id"]

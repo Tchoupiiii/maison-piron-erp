@@ -241,6 +241,114 @@ export async function replaceProductMaterials(
   }
 }
 
+const CERTIFICATE_MAX_BYTES = 15 * 1024 * 1024;
+const CERTIFICATE_MIME_TYPES = new Set(["application/pdf", "image/jpeg", "image/png"]);
+
+/**
+ * Le scan du certificat (PDF/photo) est un fichier attaché à la pierre, distinct
+ * de la page imprimable Maison Piron : ici on conserve le document du labo tel quel.
+ */
+export async function uploadGemstoneCertificate(
+  productId: string,
+  gemstoneId: string,
+  formData: FormData,
+): Promise<ActionResult<{ mediaId: string }>> {
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    return { ok: false, error: "Choisissez un fichier" };
+  }
+  if (!CERTIFICATE_MIME_TYPES.has(file.type)) {
+    return { ok: false, error: "Formats acceptés : PDF, JPEG, PNG" };
+  }
+  if (file.size > CERTIFICATE_MAX_BYTES) {
+    return { ok: false, error: "Fichier trop lourd (15 Mo maximum)" };
+  }
+
+  try {
+    const session = await requirePermission(PERMISSIONS.inventaireModifier);
+
+    const { data: gemstone } = await session.supabase
+      .from("product_gemstones")
+      .select("id, name, product_id, products(sku)")
+      .eq("id", gemstoneId)
+      .eq("product_id", productId)
+      .maybeSingle();
+    if (!gemstone) return { ok: false, error: "Pierre introuvable" };
+
+    const extension = file.type === "application/pdf" ? "pdf" : file.type === "image/png" ? "png" : "jpg";
+    const storagePath = `${productId}/certificats/${gemstoneId}/${crypto.randomUUID()}.${extension}`;
+
+    const { error: uploadError } = await session.supabase.storage
+      .from("produit_media")
+      .upload(storagePath, file, { contentType: file.type });
+    if (uploadError) return { ok: false, error: uploadError.message };
+
+    const { data: media, error } = await session.supabase
+      .from("product_media")
+      .insert({
+        product_id: productId,
+        gemstone_id: gemstoneId,
+        media_type: "certificat",
+        storage_path: storagePath,
+      })
+      .select("id")
+      .single();
+
+    if (error) {
+      await session.supabase.storage.from("produit_media").remove([storagePath]);
+      return { ok: false, error: error.message };
+    }
+
+    await logActivity(session, {
+      action: "produit_modifie",
+      summary: `Certificat scanné ajouté pour ${gemstone.name} (${gemstone.products?.sku ?? productId})`,
+      entityType: "product",
+      entityId: productId,
+    });
+
+    revalidatePath(`/inventaire/${productId}`);
+    return { ok: true, data: { mediaId: media.id } };
+  } catch (error) {
+    return { ok: false, error: actionError(error) };
+  }
+}
+
+export async function deleteGemstoneCertificate(
+  mediaId: string,
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const session = await requirePermission(PERMISSIONS.inventaireModifier);
+
+    const { data: media } = await session.supabase
+      .from("product_media")
+      .select("id, product_id, storage_path, gemstone_id, product_gemstones(name)")
+      .eq("id", mediaId)
+      .eq("media_type", "certificat")
+      .maybeSingle();
+    if (!media) return { ok: false, error: "Fichier introuvable" };
+
+    const { error: deleteError } = await session.supabase
+      .from("product_media")
+      .delete()
+      .eq("id", mediaId);
+    if (deleteError) return { ok: false, error: deleteError.message };
+
+    await session.supabase.storage.from("produit_media").remove([media.storage_path]);
+
+    await logActivity(session, {
+      action: "produit_modifie",
+      summary: `Certificat scanné retiré (${media.product_gemstones?.name ?? "pierre"})`,
+      entityType: "product",
+      entityId: media.product_id,
+    });
+
+    revalidatePath(`/inventaire/${media.product_id}`);
+    return { ok: true, data: { id: mediaId } };
+  } catch (error) {
+    return { ok: false, error: actionError(error) };
+  }
+}
+
 export async function setProductStatus(
   productId: string,
   status: ProductStatus,

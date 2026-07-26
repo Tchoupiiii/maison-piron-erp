@@ -51,6 +51,23 @@ export const PAYMENT_METHOD_LABELS = {
   mixte: "Paiement mixte",
 } as const;
 
+export const GEMSTONE_TYPE_LABELS = {
+  diamant: "Diamant",
+  emeraude: "Émeraude",
+  saphir: "Saphir",
+  rubis: "Rubis",
+  perle: "Perle",
+  autre: "Pierre",
+} as const;
+
+export const CERTIFICATE_LAB_LABELS = {
+  GIA: "GIA — Gemological Institute of America",
+  IGI: "IGI — International Gemological Institute",
+  HRD: "HRD Antwerp",
+  autre: "Laboratoire indépendant",
+  aucun: "Non certifiée en laboratoire externe",
+} as const;
+
 export const METAL_LABELS = {
   or: "Or",
   argent: "Argent",

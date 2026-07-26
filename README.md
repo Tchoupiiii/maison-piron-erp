@@ -254,6 +254,27 @@ interdite de négatif. Réservé par défaut au gemmologue et à l'admin
 `stock_movements` conserve la trace de chaque geste : entrée, réservation,
 libération, vente, retour — avec le canal, le panier et l'auteur.
 
+## Certificats de pierre : deux documents distincts
+
+Une même pierre certifiée porte deux pièces séparées, jamais confondues :
+
+| Document | Où | Contenu |
+|---|---|---|
+| **Scan du labo** (PDF/photo) | fiche pièce, par pierre | le fichier original tel qu'émis par GIA/IGI/HRD, stocké tel quel |
+| **Certificat imprimable Maison Piron** | `/inventaire/[productId]/certificat/[gemstoneId]` | mise en forme maison des caractéristiques (type, poids, pureté, couleur, taille, labo), sans prix, à remettre au client |
+
+Le scan s'appuie sur la table `product_media` (déjà présente dans le schéma
+initial, jamais câblée jusqu'ici) et le bucket privé `produit_media` : upload et
+suppression passent par `uploadGemstoneCertificate`/`deleteGemstoneCertificate`,
+gardés par `inventaire.modifier`, lecture par URL signée (5 min) via
+`inventaire.voir`. La colonne `product_media.gemstone_id` rattache le fichier à
+une pierre précise — une pièce à plusieurs pierres peut avoir un scan par pierre.
+
+Le certificat imprimable ne dépend d'aucun fichier : il relit simplement
+`product_gemstones` et imprime via `window.print()`, même mécanique que le
+ticket de caisse. Les deux évoluent indépendamment — remplacer le scan
+n'affecte pas le certificat imprimé, et vice-versa.
+
 ## Matériel : scanners et imprimantes
 
 Contrainte du cahier des charges : **aucun pilote, aucun code périphérique dans

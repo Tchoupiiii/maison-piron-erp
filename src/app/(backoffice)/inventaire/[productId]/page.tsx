@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getStaffSession } from "@/actions/auth-guard";
 import {
+  deleteGemstoneCertificate,
   deleteProduct,
   replaceProductMaterials,
   setProductStatus,
@@ -10,6 +11,7 @@ import {
 import { recalculateProductPrice, setProductPricingInputs } from "@/actions/pricing";
 import { ActionButton } from "@/components/action-button";
 import { ActionForm } from "@/components/action-form";
+import { CertificateUploadForm } from "@/components/certificate-upload-form";
 import { PriceSimulator } from "@/components/price-simulator";
 import {
   Badge,
@@ -44,12 +46,22 @@ export default async function ProductPage({
   const { data: product } = await session.supabase
     .from("products")
     .select(
-      "id, sku, name, description, status, showcase_slot, rfid_tag, labor_cost_eur, labor_description, margin_multiplier, cached_metal_cost, cached_stone_cost, cached_ht, cached_ttc, price_computed_at, sold_at, product_materials(id, metal_kind, purity_per_mille, color, weight_grams, detail), product_gemstones(id, name, gemstone_type, carat_weight, stone_count, price_per_carat, clarity, color, certificate_lab, certificate_number)",
+      "id, sku, name, description, status, showcase_slot, rfid_tag, labor_cost_eur, labor_description, margin_multiplier, cached_metal_cost, cached_stone_cost, cached_ht, cached_ttc, price_computed_at, sold_at, product_materials(id, metal_kind, purity_per_mille, color, weight_grams, detail), product_gemstones(id, name, gemstone_type, carat_weight, stone_count, price_per_carat, clarity, color, cut, certificate_lab, certificate_number, product_media(id, storage_path, created_at))",
     )
     .eq("id", productId)
     .maybeSingle();
 
   if (!product) notFound();
+
+  const certificateUrls = new Map<string, string>();
+  for (const g of product.product_gemstones ?? []) {
+    for (const media of g.product_media ?? []) {
+      const { data: signed } = await session.supabase.storage
+        .from("produit_media")
+        .createSignedUrl(media.storage_path, 300);
+      if (signed) certificateUrls.set(media.id, signed.signedUrl);
+    }
+  }
 
   const [{ data: titles }, { data: rateRows }, { data: history }] = await Promise.all([
     session.supabase
@@ -318,19 +330,63 @@ export default async function ProductPage({
                   {product.product_gemstones.map((g) => (
                     <div
                       key={g.id}
-                      className="flex items-center justify-between gap-4 border-b border-canvas px-5 py-3 last:border-b-0"
+                      className="flex flex-col gap-3 border-b border-canvas px-5 py-3 last:border-b-0"
                     >
-                      <div className="flex flex-col">
-                        <span className="text-body font-medium">{g.name}</span>
-                        <span className="text-caption text-mid-gray">
-                          {g.stone_count} × {g.carat_weight} ct · {g.clarity ?? "—"} ·{" "}
-                          {g.certificate_lab}
-                          {g.certificate_number ? ` ${g.certificate_number}` : ""}
-                        </span>
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="flex flex-col">
+                          <span className="text-body font-medium">{g.name}</span>
+                          <span className="text-caption text-mid-gray">
+                            {g.stone_count} × {g.carat_weight} ct · {g.clarity ?? "—"} ·{" "}
+                            {g.certificate_lab}
+                            {g.certificate_number ? ` ${g.certificate_number}` : ""}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="tabular text-body">
+                            {formatEUR(g.carat_weight * g.stone_count * g.price_per_carat)}
+                          </span>
+                          <Link
+                            href={`/inventaire/${productId}/certificat/${g.id}`}
+                            className={`${buttonGhost} h-9 min-h-9 px-3 text-caption`}
+                          >
+                            Certificat imprimable
+                          </Link>
+                        </div>
                       </div>
-                      <span className="tabular text-body">
-                        {formatEUR(g.carat_weight * g.stone_count * g.price_per_carat)}
-                      </span>
+
+                      <div className="flex flex-col gap-2 rounded-card border border-hairline bg-surface-alt p-3">
+                        <span className={labelClass}>Certificat scanné (labo)</span>
+                        {(g.product_media ?? []).length === 0 ? (
+                          <span className="text-caption text-mid-gray">Aucun fichier attaché.</span>
+                        ) : (
+                          <ul className="flex flex-col gap-1">
+                            {g.product_media!.map((media) => (
+                              <li key={media.id} className="flex items-center justify-between gap-3">
+                                <a
+                                  href={certificateUrls.get(media.id) ?? "#"}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-caption text-ink underline underline-offset-2"
+                                >
+                                  Ouvrir le scan du {media.created_at.slice(0, 10)}
+                                </a>
+                                {canEdit && (
+                                  <ActionButton
+                                    action={deleteGemstoneCertificate.bind(null, media.id)}
+                                    className={`${buttonGhost} h-8 min-h-8 px-2 text-caption`}
+                                    confirm="Retirer ce fichier de certificat ?"
+                                  >
+                                    Retirer
+                                  </ActionButton>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                        {canEdit && (
+                          <CertificateUploadForm productId={productId} gemstoneId={g.id} />
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
