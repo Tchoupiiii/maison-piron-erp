@@ -65,8 +65,11 @@ export default async function BackofficeLayout({
     .toUpperCase();
 
   return (
-    <div className="grid min-h-screen grid-cols-[248px_1fr] bg-canvas max-lg:grid-cols-1">
-      <aside className="sticky top-0 flex h-screen flex-col gap-6 overflow-y-auto bg-surface-alt px-3 py-5 max-lg:static max-lg:h-auto">
+    // À l'impression (certificat de pierre), la coquille disparaît : sans ça, le
+    // document remis au client emporterait la navigation, le cours de l'or et le
+    // nom de l'employé connecté.
+    <div className="grid min-h-screen grid-cols-[248px_1fr] bg-canvas max-lg:grid-cols-1 print:block print:min-h-0 print:bg-white">
+      <aside className="sticky top-0 flex h-screen flex-col gap-6 overflow-y-auto bg-surface-alt px-3 py-5 max-lg:static max-lg:h-auto print:hidden">
         <SidebarNav items={navItems} />
 
         <div className="mt-auto flex flex-col gap-3">
