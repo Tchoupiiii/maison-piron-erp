@@ -85,6 +85,7 @@ export default async function InventairePage({
       laborCostEur: Number(formData.get("laborCostEur") ?? 0),
       laborDescription: String(formData.get("laborDescription") ?? "") || null,
       marginMultiplier: Number(formData.get("marginMultiplier") ?? 2),
+      quantity: Number(formData.get("quantity") ?? 1),
       materials:
         weight > 0
           ? [
@@ -147,7 +148,7 @@ export default async function InventairePage({
             <ActionForm
               action={submitProduct}
               className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4 p-5"
-              successMessage="Pièce créée."
+              successMessage="Pièce(s) créée(s)."
               resetOnSuccess
             >
               <label className="flex flex-col gap-1">
@@ -157,6 +158,22 @@ export default async function InventairePage({
               <label className="flex flex-col gap-1">
                 <span className={labelClass}>Nom</span>
                 <input name="name" required placeholder="Solitaire Cointe" className={inputClass} />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className={labelClass}>Quantité</span>
+                <input
+                  name="quantity"
+                  type="number"
+                  min="1"
+                  max="50"
+                  step="1"
+                  defaultValue="1"
+                  className={inputClass}
+                />
+                <span className="text-caption text-mid-gray">
+                  Pièces identiques (même métal, même pierres) : chacune reste
+                  vendable et traçable séparément, référencée SKU-1, SKU-2…
+                </span>
               </label>
               <label className="flex flex-col gap-1">
                 <span className={labelClass}>Emplacement vitrine</span>

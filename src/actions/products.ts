@@ -48,11 +48,27 @@ const createProductSchema = z.object({
   marginMultiplier: z.number().positive().default(2),
   materials: z.array(materialSchema).default([]),
   gemstones: z.array(gemstoneSchema).default([]),
+  /**
+   * Pièces identiques reçues en série (ex. 12 alliances du même fournisseur,
+   * même métal/titre/poids). Chacune reste une ligne `products` à part
+   * entière — sa propre RFID, son propre prix calculé, sa propre traçabilité
+   * de vente — seule la saisie est mutualisée.
+   */
+  quantity: z.number().int().min(1).max(50).default(1),
 });
+
+/** `MP-BAG-0500` × 3 → `MP-BAG-0500-1`, `-2`, `-3` (largeur = celle du total). */
+function batchSkus(baseSku: string, quantity: number): string[] {
+  if (quantity === 1) return [baseSku];
+  const width = String(quantity).length;
+  return Array.from({ length: quantity }, (_, i) =>
+    `${baseSku}-${String(i + 1).padStart(width, "0")}`,
+  );
+}
 
 export async function createProduct(
   input: z.input<typeof createProductSchema>,
-): Promise<ActionResult<{ id: string; sku: string }>> {
+): Promise<ActionResult<{ ids: string[]; skus: string[] }>> {
   const parsed = createProductSchema.safeParse(input);
   if (!parsed.success) {
     return {
@@ -65,71 +81,86 @@ export async function createProduct(
   try {
     const session = await requirePermission(PERMISSIONS.inventaireCreer);
     const d = parsed.data;
+    const skus = batchSkus(d.sku.toUpperCase(), d.quantity);
 
-    const { data: product, error } = await session.supabase
+    // Un seul INSERT multi-lignes : soit tout le lot passe, soit rien — pas de
+    // risque de se retrouver avec 7 pièces sur 12 créées si une référence du
+    // lot entre en conflit en cours de route.
+    const { data: products, error } = await session.supabase
       .from("products")
-      .insert({
-        sku: d.sku.toUpperCase(),
-        name: d.name,
-        description: d.description ?? null,
-        showcase_slot: d.showcaseSlot ?? null,
-        labor_cost_eur: d.laborCostEur,
-        labor_description: d.laborDescription ?? null,
-        margin_multiplier: d.marginMultiplier,
-      })
-      .select("id, sku, name")
-      .single();
+      .insert(
+        skus.map((sku) => ({
+          sku,
+          name: d.name,
+          description: d.description ?? null,
+          showcase_slot: d.showcaseSlot ?? null,
+          labor_cost_eur: d.laborCostEur,
+          labor_description: d.laborDescription ?? null,
+          margin_multiplier: d.marginMultiplier,
+        })),
+      )
+      .select("id, sku, name");
 
-    if (error) {
+    if (error || !products) {
       return {
         ok: false,
-        error: error.code === "23505" ? "Cette référence existe déjà" : error.message,
+        error:
+          error?.code === "23505"
+            ? "Une des références du lot existe déjà"
+            : (error?.message ?? "Création impossible"),
       };
     }
 
     if (d.materials.length > 0) {
       const { error: matError } = await session.supabase.from("product_materials").insert(
-        d.materials.map((m) => ({
-          product_id: product.id,
-          metal_kind: m.metalKind,
-          purity_per_mille: m.purityPerMille,
-          color: m.color ?? null,
-          weight_grams: m.weightGrams,
-          detail: m.detail ?? null,
-        })),
+        products.flatMap((product) =>
+          d.materials.map((m) => ({
+            product_id: product.id,
+            metal_kind: m.metalKind,
+            purity_per_mille: m.purityPerMille,
+            color: m.color ?? null,
+            weight_grams: m.weightGrams,
+            detail: m.detail ?? null,
+          })),
+        ),
       );
       if (matError) return { ok: false, error: matError.message };
     }
 
     if (d.gemstones.length > 0) {
       const { error: gemError } = await session.supabase.from("product_gemstones").insert(
-        d.gemstones.map((g) => ({
-          product_id: product.id,
-          name: g.name,
-          gemstone_type: g.gemstoneType,
-          carat_weight: g.caratWeight,
-          stone_count: g.stoneCount,
-          price_per_carat: g.pricePerCarat,
-          clarity: g.clarity ?? null,
-          color: g.color ?? null,
-          cut: g.cut ?? null,
-          certificate_lab: g.certificateLab,
-          certificate_number: g.certificateNumber ?? null,
-        })),
+        products.flatMap((product) =>
+          d.gemstones.map((g) => ({
+            product_id: product.id,
+            name: g.name,
+            gemstone_type: g.gemstoneType,
+            carat_weight: g.caratWeight,
+            stone_count: g.stoneCount,
+            price_per_carat: g.pricePerCarat,
+            clarity: g.clarity ?? null,
+            color: g.color ?? null,
+            cut: g.cut ?? null,
+            certificate_lab: g.certificateLab,
+            certificate_number: g.certificateNumber ?? null,
+          })),
+        ),
       );
       if (gemError) return { ok: false, error: gemError.message };
     }
 
     await logActivity(session, {
       action: "produit_cree",
-      summary: `Pièce ${product.sku} créée · ${d.materials.length} matériau(x), ${d.gemstones.length} pierre(s)`,
+      summary:
+        products.length === 1
+          ? `Pièce ${products[0].sku} créée · ${d.materials.length} matériau(x), ${d.gemstones.length} pierre(s)`
+          : `${products.length} pièces créées en série (${products[0].sku} → ${products[products.length - 1].sku}) · ${d.materials.length} matériau(x), ${d.gemstones.length} pierre(s) chacune`,
       entityType: "product",
-      entityId: product.id,
-      entityLabel: `${product.name} · ${product.sku}`,
+      entityId: products[0].id,
+      entityLabel: `${products[0].name} · ${products[0].sku}`,
     });
 
     revalidatePath("/inventaire");
-    return { ok: true, data: { id: product.id, sku: product.sku } };
+    return { ok: true, data: { ids: products.map((p) => p.id), skus: products.map((p) => p.sku) } };
   } catch (error) {
     return { ok: false, error: actionError(error) };
   }
