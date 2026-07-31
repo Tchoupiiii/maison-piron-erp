@@ -32,12 +32,18 @@ const STATUS_FILTERS: { value: string; label: string }[] = [
   { value: "vendu", label: "Vendu" },
 ];
 
+const WEB_FILTERS: { value: string; label: string }[] = [
+  { value: "", label: "Site : indifférent" },
+  { value: "en-ligne", label: "En ligne" },
+  { value: "hors-ligne", label: "Hors ligne" },
+];
+
 export default async function InventairePage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; statut?: string; nouveau?: string }>;
+  searchParams: Promise<{ q?: string; statut?: string; web?: string; nouveau?: string }>;
 }) {
-  const { q, statut, nouveau } = await searchParams;
+  const { q, statut, web, nouveau } = await searchParams;
   const [session, maison] = await Promise.all([getStaffSession(), getMaison()]);
   if (!session) return null;
   if (!session.can(PERMISSIONS.inventaireVoir)) {
@@ -53,12 +59,14 @@ export default async function InventairePage({
   let query = session.supabase
     .from("products")
     .select(
-      "id, sku, name, status, showcase_slot, cached_ttc, cached_ht, price_computed_at, product_materials(metal_kind, purity_per_mille, weight_grams)",
+      "id, sku, name, status, showcase_slot, cached_ttc, cached_ht, price_computed_at, web_published, product_materials(metal_kind, purity_per_mille, weight_grams)",
     )
     .order("sku");
 
   if (q) query = query.or(`sku.ilike.%${q}%,name.ilike.%${q}%`);
   if (statut) query = query.eq("status", statut as ProductStatus);
+  if (web === "en-ligne") query = query.eq("web_published", true);
+  if (web === "hors-ligne") query = query.eq("web_published", false);
 
   const { data: products, error } = await query;
   const rows = products ?? [];
@@ -138,6 +146,11 @@ export default async function InventairePage({
               label: "Valeur vitrine",
               value: formatEUR(stockValue),
               sub: "TTC au dernier calcul",
+            },
+            {
+              label: "En ligne",
+              value: String(rows.filter((p) => p.web_published).length),
+              sub: "publiées sur le site",
             },
             { label: "Catalogue", value: String(rows.length), sub: "toutes pièces" },
           ]}
@@ -278,6 +291,16 @@ export default async function InventairePage({
               ))}
             </select>
           </label>
+          <label className="flex flex-col gap-1">
+            <span className={labelClass}>Site web</span>
+            <select name="web" defaultValue={web ?? ""} className={`${selectClass} w-48`}>
+              {WEB_FILTERS.map((f) => (
+                <option key={f.value} value={f.value}>
+                  {f.label}
+                </option>
+              ))}
+            </select>
+          </label>
           <button type="submit" className={buttonGhost}>
             Filtrer
           </button>
@@ -308,10 +331,11 @@ export default async function InventairePage({
                     <span className="tabular text-caption tracking-[0.6px] text-mid-gray">
                       {product.showcase_slot ?? product.sku}
                     </span>
-                    <span className="absolute right-3 top-3">
+                    <span className="absolute right-3 top-3 flex flex-col items-end gap-1">
                       <Badge tone={product.status === "vendu" ? "neutral" : "solid"}>
                         {PRODUCT_STATUS_LABELS[product.status]}
                       </Badge>
+                      {product.web_published && <Badge>En ligne</Badge>}
                     </span>
                   </div>
                   <div className="flex flex-col gap-1">

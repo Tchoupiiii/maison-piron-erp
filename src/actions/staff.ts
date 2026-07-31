@@ -85,6 +85,11 @@ export async function createStaffAccount(
       password: d.password,
       email_confirm: true,
       user_metadata: { full_name: d.fullName },
+      // Le site accepte désormais des inscriptions publiques. Un trigger sur
+      // `auth.users` refuse le domaine de connexion du personnel à quiconque ne
+      // porte pas ce drapeau — seule l'API admin (clé service_role) peut le
+      // poser, le point de terminaison public d'inscription ne le peut pas.
+      app_metadata: { staff: true },
     });
 
     if (error || !created.user) {

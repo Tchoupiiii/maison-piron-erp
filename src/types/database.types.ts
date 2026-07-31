@@ -62,6 +62,45 @@ export type Database = {
         }
         Relationships: []
       }
+      brands: {
+        Row: {
+          blurb: string | null
+          created_at: string
+          hero_storage_path: string | null
+          id: string
+          is_active: boolean
+          kind: string
+          name: string
+          slug: string
+          sort: number
+          updated_at: string
+        }
+        Insert: {
+          blurb?: string | null
+          created_at?: string
+          hero_storage_path?: string | null
+          id?: string
+          is_active?: boolean
+          kind: string
+          name: string
+          slug: string
+          sort?: number
+          updated_at?: string
+        }
+        Update: {
+          blurb?: string | null
+          created_at?: string
+          hero_storage_path?: string | null
+          id?: string
+          is_active?: boolean
+          kind?: string
+          name?: string
+          slug?: string
+          sort?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       customer_consents: {
         Row: {
           customer_id: string
@@ -132,6 +171,7 @@ export type Database = {
       customers: {
         Row: {
           anonymized_at: string | null
+          auth_user_id: string | null
           city: string | null
           country: string | null
           created_at: string
@@ -149,6 +189,7 @@ export type Database = {
         }
         Insert: {
           anonymized_at?: string | null
+          auth_user_id?: string | null
           city?: string | null
           country?: string | null
           created_at?: string
@@ -166,6 +207,7 @@ export type Database = {
         }
         Update: {
           anonymized_at?: string | null
+          auth_user_id?: string | null
           city?: string | null
           country?: string | null
           created_at?: string
@@ -448,6 +490,13 @@ export type Database = {
             referencedRelation: "products"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "price_history_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "web_catalogue"
+            referencedColumns: ["product_id"]
+          },
         ]
       }
       product_gemstones: {
@@ -508,6 +557,13 @@ export type Database = {
             referencedRelation: "products"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "product_gemstones_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "web_catalogue"
+            referencedColumns: ["product_id"]
+          },
         ]
       }
       product_materials: {
@@ -553,10 +609,18 @@ export type Database = {
             referencedRelation: "products"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "product_materials_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "web_catalogue"
+            referencedColumns: ["product_id"]
+          },
         ]
       }
       product_media: {
         Row: {
+          bucket_id: string
           created_at: string
           gemstone_id: string | null
           id: string
@@ -566,6 +630,7 @@ export type Database = {
           storage_path: string
         }
         Insert: {
+          bucket_id?: string
           created_at?: string
           gemstone_id?: string | null
           id?: string
@@ -575,6 +640,7 @@ export type Database = {
           storage_path: string
         }
         Update: {
+          bucket_id?: string
           created_at?: string
           gemstone_id?: string | null
           id?: string
@@ -605,17 +671,27 @@ export type Database = {
             referencedRelation: "products"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "product_media_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "web_catalogue"
+            referencedColumns: ["product_id"]
+          },
         ]
       }
       products: {
         Row: {
+          brand_id: string | null
           cached_ht: number | null
           cached_metal_cost: number | null
           cached_stone_cost: number | null
           cached_ttc: number | null
+          category: Database["public"]["Enums"]["product_category"] | null
           created_at: string
           description: string | null
           id: string
+          is_piece_unique: boolean
           labor_cost_eur: number
           labor_description: string | null
           margin_multiplier: number
@@ -626,16 +702,26 @@ export type Database = {
           sku: string
           sold_at: string | null
           status: Database["public"]["Enums"]["product_status"]
+          supply_mode: string
+          univers: Database["public"]["Enums"]["product_univers"] | null
           updated_at: string
+          web_description: string | null
+          web_published: boolean
+          web_published_at: string | null
+          web_slug: string | null
+          web_sort: number | null
         }
         Insert: {
+          brand_id?: string | null
           cached_ht?: number | null
           cached_metal_cost?: number | null
           cached_stone_cost?: number | null
           cached_ttc?: number | null
+          category?: Database["public"]["Enums"]["product_category"] | null
           created_at?: string
           description?: string | null
           id?: string
+          is_piece_unique?: boolean
           labor_cost_eur?: number
           labor_description?: string | null
           margin_multiplier?: number
@@ -646,16 +732,26 @@ export type Database = {
           sku: string
           sold_at?: string | null
           status?: Database["public"]["Enums"]["product_status"]
+          supply_mode?: string
+          univers?: Database["public"]["Enums"]["product_univers"] | null
           updated_at?: string
+          web_description?: string | null
+          web_published?: boolean
+          web_published_at?: string | null
+          web_slug?: string | null
+          web_sort?: number | null
         }
         Update: {
+          brand_id?: string | null
           cached_ht?: number | null
           cached_metal_cost?: number | null
           cached_stone_cost?: number | null
           cached_ttc?: number | null
+          category?: Database["public"]["Enums"]["product_category"] | null
           created_at?: string
           description?: string | null
           id?: string
+          is_piece_unique?: boolean
           labor_cost_eur?: number
           labor_description?: string | null
           margin_multiplier?: number
@@ -666,9 +762,24 @@ export type Database = {
           sku?: string
           sold_at?: string | null
           status?: Database["public"]["Enums"]["product_status"]
+          supply_mode?: string
+          univers?: Database["public"]["Enums"]["product_univers"] | null
           updated_at?: string
+          web_description?: string | null
+          web_published?: boolean
+          web_published_at?: string | null
+          web_slug?: string | null
+          web_sort?: number | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "products_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       repair_photos: {
         Row: {
@@ -804,6 +915,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "products"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "repair_tickets_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "web_catalogue"
+            referencedColumns: ["product_id"]
           },
         ]
       }
@@ -993,6 +1111,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "stock_holds_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "web_catalogue"
+            referencedColumns: ["product_id"]
+          },
+          {
             foreignKeyName: "stock_holds_terminal_id_fkey"
             columns: ["terminal_id"]
             isOneToOne: false
@@ -1052,6 +1177,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "products"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_movements_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "web_catalogue"
+            referencedColumns: ["product_id"]
           },
           {
             foreignKeyName: "stock_movements_source_item_id_fkey"
@@ -1120,6 +1252,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "products"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transaction_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "web_catalogue"
+            referencedColumns: ["product_id"]
           },
           {
             foreignKeyName: "transaction_items_repair_ticket_id_fkey"
@@ -1212,6 +1351,232 @@ export type Database = {
           },
         ]
       }
+      web_enquiries: {
+        Row: {
+          created_at: string
+          email: string
+          full_name: string
+          handled_at: string | null
+          handled_by: string | null
+          handled_note: string | null
+          id: string
+          kind: Database["public"]["Enums"]["enquiry_kind"]
+          message: string
+          phone: string | null
+          product_id: string | null
+          status: Database["public"]["Enums"]["enquiry_status"]
+          subject: string | null
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          full_name: string
+          handled_at?: string | null
+          handled_by?: string | null
+          handled_note?: string | null
+          id?: string
+          kind?: Database["public"]["Enums"]["enquiry_kind"]
+          message: string
+          phone?: string | null
+          product_id?: string | null
+          status?: Database["public"]["Enums"]["enquiry_status"]
+          subject?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          full_name?: string
+          handled_at?: string | null
+          handled_by?: string | null
+          handled_note?: string | null
+          id?: string
+          kind?: Database["public"]["Enums"]["enquiry_kind"]
+          message?: string
+          phone?: string | null
+          product_id?: string | null
+          status?: Database["public"]["Enums"]["enquiry_status"]
+          subject?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "web_enquiries_handled_by_fkey"
+            columns: ["handled_by"]
+            isOneToOne: false
+            referencedRelation: "staff_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "web_enquiries_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "product_availability"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "web_enquiries_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "web_enquiries_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "web_catalogue"
+            referencedColumns: ["product_id"]
+          },
+        ]
+      }
+      web_order_items: {
+        Row: {
+          id: string
+          order_id: string
+          product_id: string
+          snapshot_at: string
+          unit_price_ttc_snapshot: number
+        }
+        Insert: {
+          id?: string
+          order_id: string
+          product_id: string
+          snapshot_at?: string
+          unit_price_ttc_snapshot: number
+        }
+        Update: {
+          id?: string
+          order_id?: string
+          product_id?: string
+          snapshot_at?: string
+          unit_price_ttc_snapshot?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "web_order_items_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "web_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "web_order_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "product_availability"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "web_order_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "web_order_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "web_catalogue"
+            referencedColumns: ["product_id"]
+          },
+        ]
+      }
+      web_orders: {
+        Row: {
+          cart_ref: string
+          contact_email: string | null
+          contact_name: string | null
+          contact_phone: string | null
+          created_at: string
+          customer_id: string | null
+          expires_at: string | null
+          failed_reason: string | null
+          fulfilment_mode: Database["public"]["Enums"]["fulfilment_mode"]
+          id: string
+          mollie_payment_id: string | null
+          paid_at: string | null
+          ref: string | null
+          refunded_at: string | null
+          shipping_city: string | null
+          shipping_country: string
+          shipping_fee_ttc: number
+          shipping_postal_code: string | null
+          shipping_street: string | null
+          status: Database["public"]["Enums"]["web_order_status"]
+          subtotal_ttc: number
+          total_ttc: number
+          transaction_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          cart_ref: string
+          contact_email?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          customer_id?: string | null
+          expires_at?: string | null
+          failed_reason?: string | null
+          fulfilment_mode?: Database["public"]["Enums"]["fulfilment_mode"]
+          id?: string
+          mollie_payment_id?: string | null
+          paid_at?: string | null
+          ref?: string | null
+          refunded_at?: string | null
+          shipping_city?: string | null
+          shipping_country?: string
+          shipping_fee_ttc?: number
+          shipping_postal_code?: string | null
+          shipping_street?: string | null
+          status?: Database["public"]["Enums"]["web_order_status"]
+          subtotal_ttc?: number
+          total_ttc?: number
+          transaction_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          cart_ref?: string
+          contact_email?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          customer_id?: string | null
+          expires_at?: string | null
+          failed_reason?: string | null
+          fulfilment_mode?: Database["public"]["Enums"]["fulfilment_mode"]
+          id?: string
+          mollie_payment_id?: string | null
+          paid_at?: string | null
+          ref?: string | null
+          refunded_at?: string | null
+          shipping_city?: string | null
+          shipping_country?: string
+          shipping_fee_ttc?: number
+          shipping_postal_code?: string | null
+          shipping_street?: string | null
+          status?: Database["public"]["Enums"]["web_order_status"]
+          subtotal_ttc?: number
+          total_ttc?: number
+          transaction_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "web_orders_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "web_orders_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       product_availability: {
@@ -1226,6 +1591,113 @@ export type Database = {
           rfid_tag: string | null
           sku: string | null
           status: Database["public"]["Enums"]["product_status"] | null
+        }
+        Relationships: []
+      }
+      web_brands: {
+        Row: {
+          blurb: string | null
+          hero_storage_path: string | null
+          kind: string | null
+          name: string | null
+          published_count: number | null
+          slug: string | null
+          sort: number | null
+        }
+        Insert: {
+          blurb?: string | null
+          hero_storage_path?: string | null
+          kind?: string | null
+          name?: string | null
+          published_count?: never
+          slug?: string | null
+          sort?: number | null
+        }
+        Update: {
+          blurb?: string | null
+          hero_storage_path?: string | null
+          kind?: string | null
+          name?: string | null
+          published_count?: never
+          slug?: string | null
+          sort?: number | null
+        }
+        Relationships: []
+      }
+      web_catalogue: {
+        Row: {
+          brand_kind: string | null
+          brand_name: string | null
+          brand_slug: string | null
+          category: string | null
+          description: string | null
+          gemstones_label: string | null
+          is_available: boolean | null
+          is_piece_unique: boolean | null
+          materials_label: string | null
+          name: string | null
+          price_computed_at: string | null
+          price_ttc: number | null
+          product_id: string | null
+          slug: string | null
+          status: string | null
+          supply_mode: string | null
+          univers: string | null
+          web_published_at: string | null
+          web_sort: number | null
+        }
+        Relationships: []
+      }
+      web_maison: {
+        Row: {
+          city: string | null
+          country: string | null
+          display_name: string | null
+          legal_name: string | null
+          postal_code: string | null
+          street: string | null
+          vat_number: string | null
+        }
+        Insert: {
+          city?: string | null
+          country?: string | null
+          display_name?: string | null
+          legal_name?: string | null
+          postal_code?: string | null
+          street?: string | null
+          vat_number?: string | null
+        }
+        Update: {
+          city?: string | null
+          country?: string | null
+          display_name?: string | null
+          legal_name?: string | null
+          postal_code?: string | null
+          street?: string | null
+          vat_number?: string | null
+        }
+        Relationships: []
+      }
+      web_product_media: {
+        Row: {
+          media_type: string | null
+          position: number | null
+          slug: string | null
+          storage_path: string | null
+        }
+        Relationships: []
+      }
+      web_product_stones: {
+        Row: {
+          carat_weight: number | null
+          certificate_lab: string | null
+          clarity: string | null
+          color: string | null
+          cut: string | null
+          gemstone_type: string | null
+          name: string | null
+          slug: string | null
+          stone_count: number | null
         }
         Relationships: []
       }
@@ -1329,6 +1801,14 @@ export type Database = {
           total_amount: number
         }[]
       }
+      link_customer_account: {
+        Args: {
+          full_name_param?: string
+          marketing_param?: boolean
+          phone_param?: string
+        }
+        Returns: string
+      }
       log_activity: {
         Args: {
           action_param: Database["public"]["Enums"]["activity_action"]
@@ -1389,6 +1869,18 @@ export type Database = {
           sku: string
         }[]
       }
+      set_enquiry_status: {
+        Args: {
+          enquiry_id_param: string
+          note_param?: string
+          status_param: Database["public"]["Enums"]["enquiry_status"]
+        }
+        Returns: undefined
+      }
+      set_marketing_consent: {
+        Args: { granted_param: boolean }
+        Returns: undefined
+      }
       set_product_status: {
         Args: {
           product_id_param: string
@@ -1407,6 +1899,104 @@ export type Database = {
           previous_status: Database["public"]["Enums"]["repair_status"]
           ticket_ref: string
         }[]
+      }
+      web_attach_payment: {
+        Args: { cart_ref_param: string; mollie_payment_id_param: string }
+        Returns: undefined
+      }
+      web_begin_checkout: {
+        Args: {
+          cart_ref_param: string
+          city_param?: string
+          contact_email_param?: string
+          contact_name_param?: string
+          contact_phone_param?: string
+          fulfilment_param: Database["public"]["Enums"]["fulfilment_mode"]
+          postal_code_param?: string
+          shipping_fee_param: number
+          street_param?: string
+        }
+        Returns: {
+          order_id: string
+          shipping_ttc: number
+          subtotal_ttc: number
+          total_ttc: number
+        }[]
+      }
+      web_cart: {
+        Args: { cart_ref_param: string }
+        Returns: {
+          brand_name: string
+          current_ttc: number
+          hold_expires_at: string
+          name: string
+          price_ttc: number
+          product_id: string
+          slug: string
+          snapshot_at: string
+          still_held: boolean
+        }[]
+      }
+      web_confirm_paid: {
+        Args: {
+          mollie_payment_id_param: string
+          order_id_param: string
+          payment_method_param?: Database["public"]["Enums"]["payment_method"]
+        }
+        Returns: {
+          already_done: boolean
+          order_ref: string
+          total_amount: number
+          transaction_id: string
+          transaction_ref: string
+        }[]
+      }
+      web_fail_order: {
+        Args: {
+          order_id_param: string
+          reason_param?: string
+          status_param: Database["public"]["Enums"]["web_order_status"]
+        }
+        Returns: undefined
+      }
+      web_hold_product: {
+        Args: { cart_ref_param: string; slug_param: string }
+        Returns: {
+          hold_expires_at: string
+          name: string
+          price_ttc: number
+          product_id: string
+          slug: string
+        }[]
+      }
+      web_order_status: {
+        Args: { cart_ref_param: string }
+        Returns: {
+          failed_reason: string
+          fulfilment: Database["public"]["Enums"]["fulfilment_mode"]
+          order_id: string
+          paid_at: string
+          ref: string
+          status: Database["public"]["Enums"]["web_order_status"]
+          total_ttc: number
+        }[]
+      }
+      web_release: {
+        Args: { cart_ref_param: string; product_id_param?: string }
+        Returns: number
+      }
+      web_submit_enquiry: {
+        Args: {
+          email_param: string
+          full_name_param: string
+          honeypot_param?: string
+          kind_param: Database["public"]["Enums"]["enquiry_kind"]
+          message_param: string
+          phone_param?: string
+          product_slug_param?: string
+          subject_param?: string
+        }
+        Returns: string
       }
     }
     Enums: {
@@ -1439,8 +2029,16 @@ export type Database = {
         | "caisse_modifiee"
         | "sync_metaux"
         | "maison_modifiee"
+        | "web_produit_publie"
+        | "web_commande_payee"
+        | "web_commande_echouee"
+        | "web_demande_recue"
+        | "web_marque_modifiee"
       certificate_lab: "GIA" | "IGI" | "HRD" | "autre" | "aucun"
       contact_language: "fr" | "nl" | "en" | "de"
+      enquiry_kind: "rendez_vous" | "question" | "estimation" | "autre"
+      enquiry_status: "nouvelle" | "en_cours" | "traitee"
+      fulfilment_mode: "retrait_boutique" | "envoi_belgique"
       gemstone_type:
         | "diamant"
         | "emeraude"
@@ -1448,12 +2046,34 @@ export type Database = {
         | "rubis"
         | "perle"
         | "autre"
-      media_type: "packshot" | "profil" | "porte" | "poincon" | "certificat"
+      media_type:
+        | "packshot"
+        | "profil"
+        | "porte"
+        | "poincon"
+        | "certificat"
+        | "macro"
       metal_color: "jaune" | "blanc" | "rose"
       metal_kind: "or" | "argent" | "platine"
       payment_method: "especes" | "bancontact" | "carte" | "virement" | "mixte"
       price_change_reason: "creation" | "edition_manuelle" | "sync_cours"
+      product_category:
+        | "Bagues"
+        | "Boucles d'oreilles"
+        | "Mono boucles d'oreilles"
+        | "Bracelets"
+        | "Colliers"
+        | "Pendentifs"
+        | "Fermoirs"
+        | "Montres"
       product_status: "en_stock" | "reserve" | "vendu"
+      product_univers:
+        | "Joaillerie"
+        | "Fiançailles"
+        | "Mariage"
+        | "Horlogerie"
+        | "Accessoires"
+        | "Seconde main"
       repair_photo_phase: "avant" | "apres"
       repair_status: "check_in" | "at_bench" | "ready" | "delivered"
       rgpd_action: "anonymisation" | "export"
@@ -1471,6 +2091,13 @@ export type Database = {
         | "payee_partielle"
         | "payee"
         | "annulee"
+      web_order_status:
+        | "panier"
+        | "en_attente_paiement"
+        | "payee"
+        | "echouee"
+        | "expiree"
+        | "remboursee"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1627,9 +2254,17 @@ export const Constants = {
         "caisse_modifiee",
         "sync_metaux",
         "maison_modifiee",
+        "web_produit_publie",
+        "web_commande_payee",
+        "web_commande_echouee",
+        "web_demande_recue",
+        "web_marque_modifiee",
       ],
       certificate_lab: ["GIA", "IGI", "HRD", "autre", "aucun"],
       contact_language: ["fr", "nl", "en", "de"],
+      enquiry_kind: ["rendez_vous", "question", "estimation", "autre"],
+      enquiry_status: ["nouvelle", "en_cours", "traitee"],
+      fulfilment_mode: ["retrait_boutique", "envoi_belgique"],
       gemstone_type: [
         "diamant",
         "emeraude",
@@ -1638,12 +2273,37 @@ export const Constants = {
         "perle",
         "autre",
       ],
-      media_type: ["packshot", "profil", "porte", "poincon", "certificat"],
+      media_type: [
+        "packshot",
+        "profil",
+        "porte",
+        "poincon",
+        "certificat",
+        "macro",
+      ],
       metal_color: ["jaune", "blanc", "rose"],
       metal_kind: ["or", "argent", "platine"],
       payment_method: ["especes", "bancontact", "carte", "virement", "mixte"],
       price_change_reason: ["creation", "edition_manuelle", "sync_cours"],
+      product_category: [
+        "Bagues",
+        "Boucles d'oreilles",
+        "Mono boucles d'oreilles",
+        "Bracelets",
+        "Colliers",
+        "Pendentifs",
+        "Fermoirs",
+        "Montres",
+      ],
       product_status: ["en_stock", "reserve", "vendu"],
+      product_univers: [
+        "Joaillerie",
+        "Fiançailles",
+        "Mariage",
+        "Horlogerie",
+        "Accessoires",
+        "Seconde main",
+      ],
       repair_photo_phase: ["avant", "apres"],
       repair_status: ["check_in", "at_bench", "ready", "delivered"],
       rgpd_action: ["anonymisation", "export"],
@@ -1662,6 +2322,14 @@ export const Constants = {
         "payee_partielle",
         "payee",
         "annulee",
+      ],
+      web_order_status: [
+        "panier",
+        "en_attente_paiement",
+        "payee",
+        "echouee",
+        "expiree",
+        "remboursee",
       ],
     },
   },

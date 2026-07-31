@@ -28,6 +28,10 @@ export const PERMISSIONS = {
   metauxVoir: "metaux.voir",
   metauxSync: "metaux.sync",
   metauxRecalculer: "metaux.recalculer",
+  webMarques: "web.marques",
+  webPublier: "web.publier",
+  webCommandes: "web.commandes",
+  webDemandes: "web.demandes",
   systemeEmployes: "systeme.employes",
   systemePermissions: "systeme.permissions",
   systemeJournal: "systeme.journal",
@@ -43,6 +47,7 @@ export const PERMISSION_CATEGORIES = [
   "Clientèle",
   "Ventes",
   "Métaux",
+  "Site web",
   "Système",
 ] as const;
 
@@ -81,6 +86,11 @@ export const ACTIVITY_LABELS: Record<string, string> = {
   caisse_modifiee: "Caisse modifiée",
   maison_modifiee: "Identité de la maison modifiée",
   sync_metaux: "Synchronisation des cours",
+  web_produit_publie: "Vitrine web",
+  web_commande_payee: "Commande web payée",
+  web_commande_echouee: "Commande web échouée",
+  web_demande_recue: "Demande reçue",
+  web_marque_modifiee: "Maison modifiée",
 };
 
 /**
@@ -98,6 +108,8 @@ export const NAV_ITEMS: readonly {
   { href: "/clientele", label: "Clientèle", permission: PERMISSIONS.clienteleVoir },
   { href: "/ventes", label: "Ventes & factures", permission: PERMISSIONS.ventesVoir },
   { href: "/cours-metaux", label: "Cours des métaux", permission: PERMISSIONS.metauxVoir },
+  { href: "/commandes-web", label: "Commandes web", permission: PERMISSIONS.webCommandes },
+  { href: "/demandes", label: "Demandes", permission: PERMISSIONS.webDemandes },
   // Le point de vente est une application séparée (même base, mêmes comptes) :
   // l'entrée disparaît du menu si son URL n'est pas configurée.
   {
@@ -144,6 +156,12 @@ export const PERMISSION_PAGES: readonly {
     note: "Ce droit ouvre la caisse : encaisser une vente, scanner, réserver.",
   },
   { title: "Cours des métaux", viewKey: PERMISSIONS.metauxVoir, prefix: "metaux." },
+  {
+    title: "Site web",
+    viewKey: null,
+    prefix: "web.",
+    note: "Ces droits pilotent la vitrine en ligne : ce qui y paraît, et qui traite ce qui en revient.",
+  },
   {
     title: "Réglages (Système)",
     viewKey: null,

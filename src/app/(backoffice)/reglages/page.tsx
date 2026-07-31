@@ -10,6 +10,7 @@ import {
 } from "@/actions/staff";
 import { createTerminal, updateTerminal, updateTerminalForm } from "@/actions/terminals";
 import { updateMaisonSettings } from "@/actions/maison";
+import { saveBrand, setBrandActive } from "@/actions/web";
 import { getMaison } from "@/lib/maison";
 import { ActionButton } from "@/components/action-button";
 import { ActionForm } from "@/components/action-form";
@@ -42,6 +43,7 @@ const TABS = [
   { key: "employes", label: "Employés" },
   { key: "permissions", label: "Permissions" },
   { key: "caisses", label: "Caisses" },
+  { key: "maisons", label: "Maisons du site" },
   { key: "maison", label: "Maison" },
   { key: "journal", label: "Journal d'activité" },
   { key: "sessions", label: "Sessions actives" },
@@ -102,6 +104,18 @@ export default async function ReglagesPage({
     });
   }
 
+  async function submitBrand(formData: FormData): Promise<ActionResult<unknown>> {
+    "use server";
+    return saveBrand(String(formData.get("brandId") ?? "") || null, {
+      name: String(formData.get("name") ?? ""),
+      slug: String(formData.get("slug") ?? "") || null,
+      kind: String(formData.get("kind") ?? ""),
+      blurb: String(formData.get("blurb") ?? "") || null,
+      sort: Number(formData.get("sort") ?? 100),
+      isActive: formData.get("isActive") !== null,
+    });
+  }
+
   const maison = await getMaison();
 
   return (
@@ -129,6 +143,7 @@ export default async function ReglagesPage({
         )}
         {tab === "permissions" && <PermissionsTab session={session} staff={staff ?? []} />}
         {tab === "caisses" && <TerminalsTab session={session} submitTerminal={submitTerminal} />}
+        {tab === "maisons" && <BrandsTab session={session} submitBrand={submitBrand} />}
         {tab === "maison" && <MaisonTab session={session} />}
         {tab === "journal" && (
           <ActivityTab session={session} acteur={acteur} action={action} staff={staff ?? []} />
@@ -629,6 +644,174 @@ async function TerminalsTab({
           </div>
         </div>
       </Card>
+    </div>
+  );
+}
+
+/**
+ * Les maisons représentées alimentent la navigation du site, les pages marque
+ * et le filtre du catalogue. Elles ne se suppriment pas : des pièces vendues y
+ * renvoient et les URL restent partagées. On les masque.
+ */
+async function BrandsTab({
+  session,
+  submitBrand,
+}: {
+  session: Session;
+  submitBrand: (formData: FormData) => Promise<ActionResult<unknown>>;
+}) {
+  const { data: brands } = await session.supabase
+    .from("brands")
+    .select("id, name, slug, kind, blurb, sort, is_active")
+    .order("sort")
+    .order("name");
+
+  const canManage = session.can(PERMISSIONS.webMarques);
+  const active = (brands ?? []).filter((b) => b.is_active).length;
+
+  return (
+    <div className="flex flex-col gap-6">
+      {!canManage && (
+        <Notice>
+          Lecture seule : le droit « Gérer les maisons » n&apos;est pas accordé à votre compte.
+        </Notice>
+      )}
+
+      <Card
+        title="Maisons représentées"
+        subtitle={`${active} visible(s) sur le site, ${brands?.length ?? 0} au total`}
+      >
+        <div className="flex flex-col">
+          {(brands ?? []).map((brand) => (
+            <div key={brand.id} className="border-b border-canvas last:border-b-0">
+              <div className="grid grid-cols-[1fr_auto] items-center gap-4 px-5 py-4">
+                <div className="flex min-w-0 flex-col gap-1">
+                  <span className="flex items-center gap-2 text-body font-medium">
+                    {brand.name}
+                    <Badge>{brand.kind}</Badge>
+                    {!brand.is_active && <Badge tone="danger">Masquée</Badge>}
+                  </span>
+                  <span className="text-[13px] text-mid-gray">
+                    /maisons/{brand.slug} · ordre {brand.sort}
+                  </span>
+                </div>
+                {canManage && (
+                  <ActionButton
+                    action={setBrandActive.bind(null, brand.id, !brand.is_active)}
+                    className={`${buttonGhost} h-8 min-h-8 text-[13px]`}
+                  >
+                    {brand.is_active ? "Masquer du site" : "Remettre en ligne"}
+                  </ActionButton>
+                )}
+              </div>
+
+              {canManage && (
+                <details className="px-5 pb-4">
+                  <summary className="cursor-pointer text-[13px] text-mid-gray hover:text-ink">
+                    Modifier la maison
+                  </summary>
+                  <ActionForm
+                    action={submitBrand}
+                    className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4"
+                    successMessage="Maison enregistrée."
+                  >
+                    <input type="hidden" name="brandId" value={brand.id} />
+                    {brand.is_active && <input type="hidden" name="isActive" value="1" />}
+                    <label className="flex flex-col gap-1">
+                      <span className={labelClass}>Nom</span>
+                      <input name="name" required defaultValue={brand.name} className={inputClass} />
+                    </label>
+                    <label className="flex flex-col gap-1">
+                      <span className={labelClass}>Spécialité</span>
+                      <input name="kind" required defaultValue={brand.kind} className={inputClass} />
+                    </label>
+                    <label className="flex flex-col gap-1">
+                      <span className={labelClass}>Adresse (slug)</span>
+                      <input name="slug" defaultValue={brand.slug} className={inputClass} />
+                      <span className="text-caption text-mid-gray">
+                        La changer casse les liens déjà partagés.
+                      </span>
+                    </label>
+                    <label className="flex flex-col gap-1">
+                      <span className={labelClass}>Ordre</span>
+                      <input
+                        name="sort"
+                        type="number"
+                        min="0"
+                        step="1"
+                        defaultValue={brand.sort}
+                        className={inputClass}
+                      />
+                    </label>
+                    <label className="col-span-full flex flex-col gap-1">
+                      <span className={labelClass}>Présentation</span>
+                      <textarea
+                        name="blurb"
+                        rows={3}
+                        defaultValue={brand.blurb ?? ""}
+                        className={`${inputClass} h-auto py-2`}
+                      />
+                    </label>
+                    <div className="col-span-full">
+                      <button type="submit" className={buttonGhost}>
+                        Enregistrer
+                      </button>
+                    </div>
+                  </ActionForm>
+                </details>
+              )}
+            </div>
+          ))}
+          {(brands ?? []).length === 0 && (
+            <EmptyState title="Aucune maison" hint="Ajoutez la première ci-dessous." />
+          )}
+        </div>
+      </Card>
+
+      {canManage && (
+        <Card title="Nouvelle maison">
+          <ActionForm
+            action={submitBrand}
+            className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4 p-5"
+            successMessage="Maison ajoutée."
+            resetOnSuccess
+          >
+            <input type="hidden" name="isActive" value="1" />
+            <label className="flex flex-col gap-1">
+              <span className={labelClass}>Nom</span>
+              <input name="name" required placeholder="Pomellato" className={inputClass} />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className={labelClass}>Spécialité</span>
+              <input name="kind" required placeholder="Joaillerie" className={inputClass} />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className={labelClass}>Adresse (slug)</span>
+              <input name="slug" placeholder="dérivée du nom si vide" className={inputClass} />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className={labelClass}>Ordre</span>
+              <input
+                name="sort"
+                type="number"
+                min="0"
+                step="1"
+                defaultValue="100"
+                className={inputClass}
+              />
+            </label>
+            <label className="col-span-full flex flex-col gap-1">
+              <span className={labelClass}>Présentation</span>
+              <textarea name="blurb" rows={3} className={`${inputClass} h-auto py-2`} />
+            </label>
+            <div className="col-span-full">
+              <button type="submit" className={buttonPrimary}>
+                Ajouter la maison
+              </button>
+            </div>
+          </ActionForm>
+        </Card>
+      )}
     </div>
   );
 }

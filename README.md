@@ -189,13 +189,14 @@ src/
                     activity.ts n'est PAS "use server" — sinon ce serait un
                     point d'entrée public de journalisation
   app/
-    (backoffice)/   sidebar + écrans ERP + /reglages (5 onglets admin)
-    (pos)/pos/      caisse tactile et ticket imprimable, mêmes actions
-    api/cron/
+    (backoffice)/   sidebar + écrans ERP + /reglages (onglets admin), plus
+                    /commandes-web et /demandes, alimentés par le site
+    api/cron/       metal-rates (quotidien), holds (quart d'heure)
     auth/login/
     not-found.tsx   404 maison (une variante aussi dans (backoffice))
   components/       ui.tsx (primitives partagées), permission-matrix,
-                    pos-register, rate-converter, price-simulator, rgpd-dialog
+                    rate-converter, price-simulator, rgpd-dialog,
+                    web-media-upload-form (photos de vitrine)
   lib/
     supabase/       clients serveur, navigateur, proxy
     pricing/        moteur d'aperçu
@@ -207,12 +208,23 @@ src/
   proxy.ts          garde d'authentification (ex-middleware, renommé en Next.js 16)
 ```
 
-### Pourquoi le POS dans la même application
+### Trois applications, une base
 
-Boutique unique, quelques ventes par jour, pas de besoin hors-ligne. Une
-application séparée dupliquerait le moteur de prix et les Server Actions, avec un
-risque réel d'écart entre la caisse et le back-office. Le besoin tactile est
-couvert par un layout dédié au groupe de routes `(pos)`.
+La caisse a été extraite de cette application (commit `ea3931f`) : elle vit dans
+`../pos`, et le site public dans `../../Site Web/web`. Les trois partagent le même
+projet Supabase, les mêmes comptes et les mêmes fonctions métier — c'est la base
+qui porte les règles, pas les applications.
+
+| | Répertoire | Port | Rôle |
+|---|---|---|---|
+| ERP | `ERP/app` | 3000 | inventaire, clientèle, ventes, réglages |
+| Caisse | `ERP/pos` | 3001 | encaissement tactile, scan, ticket |
+| Site | `Site Web/web` | 3002 | vitrine publique et vente en ligne |
+
+Les migrations restent **ici**, dans `supabase/migrations/` : source de vérité
+unique du schéma pour les trois. Après chaque migration, régénérer
+`src/types/database.types.ts` dans les trois dépôts — les fichiers doivent rester
+identiques.
 
 ## Stock : scanner réserve, payer décrémente
 
@@ -234,13 +246,45 @@ Le verrou métier n'est pas du code applicatif : c'est un **index unique partiel
 `stock_holds (product_id) where released_at is null`. PostgreSQL arbitre lui-même
 — aucun navigateur, aucun onglet, aucune API tierce ne peut le contourner.
 
-### Ce que le site web doit interroger
+### Ce que le site web interroge
 
-`product_availability`, jamais `products`. La vue expose `is_available`, qui vaut
-faux dès qu'un panier — en boutique ou en ligne — tient la pièce, alors même que
-`status` vaut encore `en_stock`. Le site utilise exactement les mêmes fonctions
-que la caisse : `scan_product`, `release_hold`, `create_sale` avec un `cart_ref`
-propre. Rien à redévelopper, et surtout rien à re-sécuriser.
+Le site ne peut pas passer par `product_availability` : cette vue est
+`security_invoker`, donc soumise à la RLS de `products`, qui ne répond rien à un
+visiteur anonyme. Il lit des vues **security definer** dédiées — `web_catalogue`,
+`web_brands`, `web_product_media`, `web_product_stones`, `web_maison` — accordées
+à `anon` et n'exposant que le TTC. Aucun champ de coût n'y figure.
+
+Il ne peut pas non plus appeler `scan_product` ni `create_sale`, qui exigent
+`ventes.creer`. D'où le découpage :
+
+- `private.create_sale_core` porte toute la logique de vente — verrou
+  `for update`, contrôle des réservations, numérotation, mouvements de stock —
+  **sans aucun contrôle de permission**. Aucun grant : seules des fonctions
+  security definer l'atteignent.
+- `public.create_sale` est désormais un mince gardien : il vérifie `ventes.creer`
+  (et `ventes.facturer` le cas échéant) puis délègue. Signature inchangée, donc
+  droits conservés — la caisse et l'ERP n'ont rien à changer.
+- `web_hold_product`, `web_release`, `web_cart` rejouent la logique de
+  `scan_product` sans exiger de permission : c'est le `cart_ref` qui autorise. Son
+  format `WEB-<uuid>` est imposé côté SQL, pour qu'un visiteur ne puisse pas
+  présenter celui d'une caisse.
+- `web_confirm_paid` appelle le cœur directement, **sous clé service_role
+  uniquement**, depuis le seul webhook Mollie.
+
+Une pièce mise au panier en ligne occupe donc le même `stock_holds` qu'un scan en
+caisse : l'un des deux est refusé, jamais les deux acceptés.
+
+Deux réglages accompagnent l'ouverture au public :
+
+- un trigger sur `auth.users` refuse le domaine `@maison-piron.invalid` à toute
+  inscription qui ne porte pas `raw_app_meta_data.staff = true` — drapeau que
+  seule l'API admin peut poser. Sans lui, un inconnu pourrait déposer
+  `camille@maison-piron.invalid` et bloquer la création de ce compte employé.
+  `createStaffAccount` pose ce drapeau : ne pas le retirer.
+- le cron `/api/cron/holds` libère les réservations expirées toutes les quinze
+  minutes. En boutique seule, `release_expired_holds()` était appelée à chaque
+  scan ; un panier web abandonné à 23 h aurait sinon retenu sa pièce jusqu'au
+  premier scan du lendemain.
 
 ### Retours
 

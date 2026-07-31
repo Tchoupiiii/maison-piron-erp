@@ -4,6 +4,10 @@
     {
       "path": "/api/cron/metal-rates",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/holds",
+      "schedule": "*/15 * * * *"
     }
   ]
 }

@@ -13,9 +13,11 @@ import {
   updateProduct,
 } from "@/actions/products";
 import { recalculateProductPrice, setProductPricingInputs } from "@/actions/pricing";
+import { deleteWebMedia, setWebPublication, updateProductWeb } from "@/actions/web";
 import { ActionButton } from "@/components/action-button";
 import { ActionForm } from "@/components/action-form";
 import { CertificateUploadForm } from "@/components/certificate-upload-form";
+import { WEB_MEDIA_LABELS, WebMediaUploadForm } from "@/components/web-media-upload-form";
 import { PriceSimulator } from "@/components/price-simulator";
 import { AccessRestricted } from "@/components/access-restricted";
 import {
@@ -43,6 +45,29 @@ import type { ActionResult } from "@/actions/types";
 import type { Database } from "@/types/database.types";
 
 type MetalKind = Database["public"]["Enums"]["metal_kind"];
+type ProductCategory = Database["public"]["Enums"]["product_category"];
+type ProductUnivers = Database["public"]["Enums"]["product_univers"];
+
+/** Mêmes listes que les enums SQL — l'ordre est celui du menu du site. */
+const CATEGORIES: readonly ProductCategory[] = [
+  "Bagues",
+  "Boucles d'oreilles",
+  "Mono boucles d'oreilles",
+  "Bracelets",
+  "Colliers",
+  "Pendentifs",
+  "Fermoirs",
+  "Montres",
+];
+
+const UNIVERS: readonly ProductUnivers[] = [
+  "Joaillerie",
+  "Fiançailles",
+  "Mariage",
+  "Horlogerie",
+  "Accessoires",
+  "Seconde main",
+];
 
 type GemstoneInput = Parameters<typeof addGemstone>[1];
 
@@ -216,7 +241,7 @@ export default async function ProductPage({
   const { data: product } = await session.supabase
     .from("products")
     .select(
-      "id, sku, name, description, status, showcase_slot, rfid_tag, labor_cost_eur, labor_description, margin_multiplier, cached_metal_cost, cached_stone_cost, cached_ht, cached_ttc, price_computed_at, sold_at, product_materials(id, metal_kind, purity_per_mille, color, weight_grams, detail), product_gemstones(id, name, gemstone_type, carat_weight, stone_count, price_per_carat, clarity, color, cut, certificate_lab, certificate_number, product_media(id, storage_path, created_at))",
+      "id, sku, name, description, status, showcase_slot, rfid_tag, labor_cost_eur, labor_description, margin_multiplier, cached_metal_cost, cached_stone_cost, cached_ht, cached_ttc, price_computed_at, sold_at, brand_id, category, univers, supply_mode, is_piece_unique, web_published, web_published_at, web_slug, web_description, web_sort, product_materials(id, metal_kind, purity_per_mille, color, weight_grams, detail), product_gemstones(id, name, gemstone_type, carat_weight, stone_count, price_per_carat, clarity, color, cut, certificate_lab, certificate_number, product_media(id, storage_path, created_at))",
     )
     .eq("id", productId)
     .maybeSingle();
@@ -233,7 +258,8 @@ export default async function ProductPage({
     }
   }
 
-  const [{ data: titles }, { data: rateRows }, { data: history }] = await Promise.all([
+  const [{ data: titles }, { data: rateRows }, { data: history }, { data: brands }, { data: webMedia }] =
+    await Promise.all([
     session.supabase
       .from("metal_titles")
       .select("metal_kind, purity_per_mille, label")
@@ -250,7 +276,18 @@ export default async function ProductPage({
       .eq("product_id", productId)
       .order("computed_at", { ascending: false })
       .limit(10),
-  ]);
+    session.supabase
+      .from("brands")
+      .select("id, name, kind")
+      .eq("is_active", true)
+      .order("sort"),
+    session.supabase
+      .from("product_media")
+      .select("id, media_type, storage_path, position")
+      .eq("product_id", productId)
+      .eq("bucket_id", "web_media")
+      .order("position"),
+    ]);
 
   // dernier cours connu par métal
   const rates: Partial<Record<MetalKind, number>> = {};
@@ -268,7 +305,13 @@ export default async function ProductPage({
   const canPrice = session.can(PERMISSIONS.inventairePrix);
   const canStatus = session.can(PERMISSIONS.inventaireStatut);
   const canDelete = session.can(PERMISSIONS.inventaireSupprimer);
+  const canWeb = session.can(PERMISSIONS.webPublier);
   const isSold = product.status === "vendu";
+
+  // Bucket public : l'URL est directe, pas de signature à renouveler.
+  const webMediaUrl = (path: string) =>
+    session.supabase.storage.from("web_media").getPublicUrl(path).data.publicUrl;
+  const webSiteUrl = process.env.NEXT_PUBLIC_WEB_SITE_URL?.replace(/\/$/, "");
 
   async function saveIdentity(formData: FormData): Promise<ActionResult<unknown>> {
     "use server";
@@ -303,6 +346,22 @@ export default async function ProductPage({
       laborCostEur: Number(formData.get("laborCostEur") ?? 0),
       marginMultiplier: Number(formData.get("marginMultiplier") ?? 2),
       laborDescription: String(formData.get("laborDescription") ?? "") || undefined,
+    });
+  }
+
+  async function saveWeb(formData: FormData): Promise<ActionResult<unknown>> {
+    "use server";
+    return updateProductWeb(productId, {
+      brandId: String(formData.get("brandId") ?? "") || null,
+      category: String(formData.get("category") ?? "") || null,
+      univers: String(formData.get("univers") ?? "") || null,
+      slug: String(formData.get("slug") ?? "") || null,
+      description: String(formData.get("webDescription") ?? "") || null,
+      supplyMode: (String(formData.get("supplyMode") ?? "stock") === "sur_demande"
+        ? "sur_demande"
+        : "stock") as "stock" | "sur_demande",
+      isPieceUnique: formData.get("isPieceUnique") === "on",
+      sort: formData.get("webSort") ? Number(formData.get("webSort")) : null,
     });
   }
 
@@ -628,6 +687,203 @@ export default async function ProductPage({
                     </div>
                   </ActionForm>
                 </details>
+              )}
+            </Card>
+
+            <Card
+              title="Site web"
+              subtitle={
+                product.web_published
+                  ? `En ligne depuis le ${product.web_published_at?.slice(0, 10) ?? "—"}`
+                  : "Hors ligne : la pièce n'apparaît nulle part sur le site."
+              }
+              aside={
+                <div className="flex items-center gap-2">
+                  <Badge tone={product.web_published ? "solid" : "neutral"}>
+                    {product.web_published ? "Publiée" : "Non publiée"}
+                  </Badge>
+                  {canWeb && (
+                    <ActionButton
+                      action={setWebPublication.bind(null, productId, !product.web_published)}
+                      className={`${buttonGhost} h-8 min-h-8 px-3 text-caption`}
+                      confirm={
+                        product.web_published
+                          ? "Retirer cette pièce du site ? Son adresse renverra une page introuvable."
+                          : undefined
+                      }
+                    >
+                      {product.web_published ? "Retirer du site" : "Publier"}
+                    </ActionButton>
+                  )}
+                </div>
+              }
+            >
+              {canWeb ? (
+                <ActionForm
+                  action={saveWeb}
+                  className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4 p-5"
+                  successMessage="Vitrine enregistrée."
+                >
+                  <label className="flex flex-col gap-1">
+                    <span className={labelClass}>Maison</span>
+                    <select
+                      name="brandId"
+                      defaultValue={product.brand_id ?? ""}
+                      className={selectClass}
+                    >
+                      <option value="">—</option>
+                      {(brands ?? []).map((b) => (
+                        <option key={b.id} value={b.id}>
+                          {b.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className={labelClass}>Catégorie</span>
+                    <select
+                      name="category"
+                      defaultValue={product.category ?? ""}
+                      className={selectClass}
+                    >
+                      <option value="">—</option>
+                      {CATEGORIES.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className={labelClass}>Univers</span>
+                    <select
+                      name="univers"
+                      defaultValue={product.univers ?? ""}
+                      className={selectClass}
+                    >
+                      <option value="">—</option>
+                      {UNIVERS.map((u) => (
+                        <option key={u} value={u}>
+                          {u}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className={labelClass}>Adresse (slug)</span>
+                    <input
+                      name="slug"
+                      defaultValue={product.web_slug ?? ""}
+                      placeholder="dérivée du nom si vide"
+                      className={inputClass}
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className={labelClass}>Approvisionnement</span>
+                    <select
+                      name="supplyMode"
+                      defaultValue={product.supply_mode}
+                      className={selectClass}
+                    >
+                      <option value="stock">En boutique</option>
+                      <option value="sur_demande">Sur demande</option>
+                    </select>
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className={labelClass}>Ordre de mise en avant</span>
+                    <input
+                      name="webSort"
+                      type="number"
+                      min="0"
+                      step="1"
+                      defaultValue={product.web_sort ?? ""}
+                      placeholder="petit = plus haut"
+                      className={inputClass}
+                    />
+                  </label>
+                  <label className="col-span-full flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      name="isPieceUnique"
+                      defaultChecked={product.is_piece_unique}
+                      className="size-4 accent-ink"
+                    />
+                    <span className="text-body">Signaler comme pièce unique</span>
+                  </label>
+                  <label className="col-span-full flex flex-col gap-1">
+                    <span className={labelClass}>Description pour le site</span>
+                    <textarea
+                      name="webDescription"
+                      rows={4}
+                      defaultValue={product.web_description ?? ""}
+                      placeholder="Écrite pour le client, pas pour l'atelier."
+                      className={`${inputClass} h-auto py-2`}
+                    />
+                  </label>
+                  <div className="col-span-full">
+                    <button type="submit" className={buttonPrimary}>
+                      Enregistrer la vitrine
+                    </button>
+                  </div>
+                </ActionForm>
+              ) : (
+                <div className="flex flex-col gap-1 p-5 text-body">
+                  <span>
+                    {product.category ?? "Sans catégorie"} · {product.univers ?? "Sans univers"}
+                  </span>
+                  <span className="text-mid-gray">{product.web_description ?? "—"}</span>
+                  <p className="text-caption text-mid-gray">
+                    Lecture seule : droit « Publier une pièce » non accordé.
+                  </p>
+                </div>
+              )}
+
+              <div className="flex flex-col gap-3 border-t border-canvas p-5">
+                <span className={labelClass}>Photos de la vitrine</span>
+                {(webMedia ?? []).length === 0 ? (
+                  <span className="text-caption text-mid-gray">
+                    Aucune photo. Le site affiche un cadre vide à la place.
+                  </span>
+                ) : (
+                  <div className="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-3">
+                    {webMedia!.map((media) => (
+                      <div key={media.id} className="flex flex-col gap-1">
+                        {/* eslint-disable-next-line @next/next/no-img-element -- bucket public, hors config next/image */}
+                        <img
+                          src={webMediaUrl(media.storage_path)}
+                          alt={WEB_MEDIA_LABELS[media.media_type] ?? media.media_type}
+                          className="aspect-square w-full rounded-card border border-hairline object-cover"
+                        />
+                        <span className="text-caption text-mid-gray">
+                          {WEB_MEDIA_LABELS[media.media_type] ?? media.media_type}
+                        </span>
+                        {canWeb && (
+                          <ActionButton
+                            action={deleteWebMedia.bind(null, media.id)}
+                            className={`${buttonGhost} h-8 min-h-8 px-2 text-caption`}
+                            confirm="Retirer cette photo du site ?"
+                          >
+                            Retirer
+                          </ActionButton>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {canWeb && <WebMediaUploadForm productId={productId} />}
+              </div>
+
+              {product.web_published && product.web_slug && webSiteUrl && (
+                <div className="border-t border-canvas px-5 py-3">
+                  <a
+                    href={`${webSiteUrl}/piece/${product.web_slug}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-caption text-ink underline underline-offset-2"
+                  >
+                    Voir la fiche sur le site
+                  </a>
+                </div>
               )}
             </Card>
           </div>

@@ -129,9 +129,15 @@ export default async function VentesPage({
                       <span className="text-body font-medium">
                         {sale.customers?.full_name ?? "Client de passage"}
                       </span>
-                      <span className="text-caption text-mid-gray">
+                      <span className="flex flex-wrap items-center gap-2 text-caption text-mid-gray">
                         {sale.created_at.slice(0, 10)}
-                        {sale.pos_terminals?.name ? ` · ${sale.pos_terminals.name}` : ""}
+                        {/* Pas de caisse = vente du site : c'est ainsi que
+                            `create_sale_core` détermine déjà le canal. */}
+                        {sale.pos_terminals?.name ? (
+                          <>· {sale.pos_terminals.name}</>
+                        ) : (
+                          <Badge>Site web</Badge>
+                        )}
                       </span>
                     </div>
                     <div className="flex flex-col items-end gap-1">
