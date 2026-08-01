@@ -1,15 +1,17 @@
 import { createServiceClient } from "@/lib/supabase/server";
 
 /**
- * Libération des réservations expirées.
+ * Libération des réservations boutique expirées, et nettoyage des commandes
+ * web dont le paiement a été abandonné.
  *
- * `release_expired_holds()` est déjà appelée à chaque scan et à chaque
- * encaissement : en boutique seule, aucune pièce ne restait bloquée longtemps.
- * Le site change la donne — un panier abandonné à 23 h retiendrait sa pièce
- * jusqu'au premier scan du lendemain matin, invisible en vitrine.
+ * Le panier web ne retient plus aucune pièce (voir la migration
+ * `panier_web_sans_reservation`) : seul un scan en boutique pose encore une
+ * réservation, purgée à chaque scan et à chaque encaissement. Ce passage
+ * régulier couvre le cas où la boutique est fermée et où personne ne scanne
+ * plus pour déclencher ce nettoyage.
  *
- * D'où ce passage régulier. La fonction est idempotente et ne touche que les
- * réservations dont l'échéance est dépassée.
+ * La fonction est idempotente et ne touche que les réservations dont
+ * l'échéance est dépassée.
  */
 export async function GET(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
@@ -33,13 +35,16 @@ export async function GET(request: Request) {
     return Response.json({ ok: false, error: error.message }, { status: 502 });
   }
 
-  // Un panier web dont les pièces sont reparties n'a plus lieu d'attendre un
-  // paiement : on le classe pour qu'il sorte de la liste de travail.
+  // Une session de paiement abandonnée depuis plus de 30 minutes ne reprendra
+  // pas : on referme la commande pour qu'elle sorte de la liste de travail.
+  // Un simple panier ('panier') ne retient aucune pièce : il peut vivre
+  // indéfiniment sans conséquence sur le stock, rien à expirer ici.
+  const staleBefore = new Date(Date.now() - 30 * 60 * 1000).toISOString();
   const { error: expireError } = await supabase
     .from("web_orders")
-    .update({ status: "expiree", failed_reason: "Réservation expirée" })
-    .in("status", ["panier", "en_attente_paiement"])
-    .lt("expires_at", new Date().toISOString())
+    .update({ status: "expiree", failed_reason: "Paiement abandonné" })
+    .eq("status", "en_attente_paiement")
+    .lt("updated_at", staleBefore)
     .is("transaction_id", null);
 
   return Response.json({

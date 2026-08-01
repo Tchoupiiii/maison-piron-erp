@@ -2034,6 +2034,7 @@ export type Database = {
         | "web_commande_echouee"
         | "web_demande_recue"
         | "web_marque_modifiee"
+        | "panier_libere"
       certificate_lab: "GIA" | "IGI" | "HRD" | "autre" | "aucun"
       contact_language: "fr" | "nl" | "en" | "de"
       enquiry_kind: "rendez_vous" | "question" | "estimation" | "autre"
@@ -2259,6 +2260,7 @@ export const Constants = {
         "web_commande_echouee",
         "web_demande_recue",
         "web_marque_modifiee",
+        "panier_libere",
       ],
       certificate_lab: ["GIA", "IGI", "HRD", "autre", "aucun"],
       contact_language: ["fr", "nl", "en", "de"],

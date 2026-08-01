@@ -9,6 +9,7 @@ import {
   updateStaffIdentity,
 } from "@/actions/staff";
 import { createTerminal, updateTerminal, updateTerminalForm } from "@/actions/terminals";
+import { releaseHoldAdmin } from "@/actions/holds";
 import { updateMaisonSettings } from "@/actions/maison";
 import { saveBrand, setBrandActive } from "@/actions/web";
 import { getMaison } from "@/lib/maison";
@@ -436,8 +437,69 @@ async function TerminalsTab({
 
   const canManage = session.can(PERMISSIONS.systemeCaisses);
 
+  const { data: holds } = canManage
+    ? await session.supabase
+        .from("stock_holds")
+        .select(
+          "id, product_id, cart_ref, channel, created_at, expires_at, products(sku, name), pos_terminals(name)",
+        )
+        .is("released_at", null)
+        .order("created_at")
+    : { data: null };
+
   return (
     <div className="flex flex-col gap-6">
+      {canManage && (
+        <Card
+          title="Paniers en cours"
+          subtitle={`${holds?.length ?? 0} pièce(s) retenue(s) — boutique uniquement, le panier web ne réserve rien`}
+        >
+          {(holds ?? []).length === 0 ? (
+            <p className="p-5 text-body text-mid-gray">Aucune réservation en cours.</p>
+          ) : (
+            <div className="flex flex-col">
+              {(holds ?? []).map((h) => (
+                <div
+                  key={h.id}
+                  className="flex items-center justify-between gap-4 border-b border-canvas px-5 py-3 last:border-b-0"
+                >
+                  <div className="flex flex-col">
+                    <span className="text-body font-medium">
+                      {h.products?.name ?? "Pièce"}{" "}
+                      <span className="text-mid-gray">{h.products?.sku}</span>
+                    </span>
+                    <span className="text-[13px] text-mid-gray">
+                      Panier {h.cart_ref} · {h.pos_terminals?.name ?? h.channel} · retenue depuis{" "}
+                      {h.created_at.slice(11, 16)}, expire à {h.expires_at.slice(11, 16)}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <ActionButton
+                      action={releaseHoldAdmin.bind(
+                        null,
+                        h.cart_ref,
+                        h.product_id,
+                        h.products?.name ?? h.products?.sku ?? "Pièce",
+                      )}
+                      className={`${buttonGhost} h-8 min-h-8 text-[13px]`}
+                    >
+                      Libérer cette pièce
+                    </ActionButton>
+                    <ActionButton
+                      action={releaseHoldAdmin.bind(null, h.cart_ref, null, "Panier")}
+                      className={`${buttonDanger} h-8 min-h-8 text-[13px]`}
+                      confirm={`Vider tout le panier ${h.cart_ref} ?`}
+                    >
+                      Vider le panier
+                    </ActionButton>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
+
       <Card title="Caisses" subtitle={`${terminals?.length ?? 0} point(s) de vente`}>
         <div className="flex flex-col">
           {(terminals ?? []).map((terminal) => (
@@ -610,19 +672,30 @@ async function TerminalsTab({
 
           <div className="flex flex-col gap-1">
             <span className="text-body font-medium text-ink">
-              Scanner ne vend pas : ça réserve
+              Scanner ne vend pas : ça réserve — en boutique seulement
             </span>
             <p>
-              Une pièce scannée est retenue 30 minutes, le temps de conclure. Elle reste
-              en stock — le stock ne baisse qu&apos;au paiement — mais elle disparaît des
-              pièces vendables, y compris pour le site web. Si le client renonce, retirez
-              la ligne du panier : la pièce se rouvre aussitôt. Si personne ne fait rien,
-              elle se rouvre seule à l&apos;expiration.
+              Une pièce scannée en boutique est retenue 15 minutes, le temps de conclure.
+              Elle reste en stock — le stock ne baisse qu&apos;au paiement — mais elle
+              disparaît des pièces vendables, y compris pour le site web. Si le client
+              renonce, retirez la ligne du panier : la pièce se rouvre aussitôt. Si
+              personne ne fait rien, elle se rouvre seule à l&apos;expiration, ou depuis
+              « Paniers en cours » ci-dessus.
             </p>
             <p>
-              C&apos;est la base qui arbitre, pas l&apos;écran : si la boutique et le site
-              visent la même pièce à la même seconde, l&apos;un des deux est refusé avec un
-              message clair. Le stock négatif est impossible.
+              Le panier du site web ne réserve rien : un visiteur peut mettre une pièce au
+              panier et repartir sans qu&apos;elle disparaisse de la vitrine. Seul un
+              paiement effectivement confirmé la fait basculer en vendue. Le risque
+              assumé : un paiement en ligne peut, très rarement, échouer parce que la
+              pièce vient d&apos;être vendue en boutique entre-temps — il se rattrape par
+              un remboursement, pas par une réservation qui aurait affiché « indisponible »
+              à tort pendant toute une navigation.
+            </p>
+            <p>
+              C&apos;est la base qui arbitre, pas l&apos;écran : au moment du paiement,
+              qu&apos;il vienne de la caisse ou du site, l&apos;un des deux est refusé avec
+              un message clair si la pièce est déjà partie. Le stock négatif est
+              impossible.
             </p>
           </div>
 

@@ -226,25 +226,48 @@ unique du schéma pour les trois. Après chaque migration, régénérer
 `src/types/database.types.ts` dans les trois dépôts — les fichiers doivent rester
 identiques.
 
-## Stock : scanner réserve, payer décrémente
+## Stock : scanner réserve en boutique, payer décrémente partout
 
 Les pièces de la maison sont uniques : une ligne `products` = un bijou. Le stock
 négatif est donc impossible **par construction**, à une condition — que la
 transition vers `vendu` soit sérialisée. C'est le rôle du `select … for update`
-de `create_sale` : si la boutique et le site encaissent la même pièce à la même
-seconde, la seconde transaction attend, relit le statut et échoue proprement.
-L'un des deux est refusé, jamais les deux acceptés.
+de `private.create_sale_core` : si la boutique et le site encaissent la même
+pièce à la même seconde, la seconde transaction attend, relit le statut et
+échoue proprement. L'un des deux est refusé, jamais les deux acceptés.
 
 | Geste | Table `products` | Vendable ? | Écriture |
 |---|---|---|---|
-| Scan (code-barres **ou** RFID) | inchangée, `en_stock` | non | `stock_holds`, 30 min |
-| Retrait du panier / abandon / expiration | inchangée | oui à nouveau | `stock_holds.released_at` |
-| **Paiement** | → `vendu` | non | c'est **ici**, et seulement ici, que le stock baisse |
+| Scan en boutique (code-barres **ou** RFID) | inchangée, `en_stock` | non | `stock_holds`, 15 min |
+| Ajout au panier sur le site | inchangée | oui | rien — le panier web ne réserve pas |
+| Retrait du panier boutique / abandon / expiration | inchangée | oui à nouveau | `stock_holds.released_at` |
+| **Paiement** (caisse ou site) | → `vendu` | non | c'est **ici**, et seulement ici, que le stock baisse |
 | Retour | → `en_stock` | oui à nouveau | note de crédit `AV-` |
 
 Le verrou métier n'est pas du code applicatif : c'est un **index unique partiel**
 `stock_holds (product_id) where released_at is null`. PostgreSQL arbitre lui-même
 — aucun navigateur, aucun onglet, aucune API tierce ne peut le contourner.
+
+Un admin peut vider un panier boutique ou en retirer une pièce depuis
+Réglages → Caisses → « Paniers en cours », par exemple si une caisse a planté
+avant de libérer proprement ce qu'elle tenait. Le geste est journalisé à part
+(`panier_libere`), pour se distinguer d'un abandon normal.
+
+### Panier web : aucune réservation avant le paiement
+
+Décision assumée : mettre une pièce au panier sur le site n'a **aucun** effet
+sur sa disponibilité, ni en boutique ni en ligne. Seul un paiement réellement
+confirmé — caisse ou webhook Mollie — fait basculer la pièce en `vendu`. Le
+risque accepté en échange : un paiement en ligne peut, rarement, échouer parce
+que la pièce vient d'être vendue en boutique dans l'intervalle ; il se rattrape
+par un remboursement, jamais par une pièce affichée « indisponible » à tort
+pendant qu'un visiteur la regardait sans acheter.
+
+`web_hold_product` garde son nom historique (le site en dépend) mais ne pose
+plus de `stock_holds` : c'est une mise au panier, pas une réservation.
+`web_begin_checkout` vérifie la disponibilité en temps réel juste avant
+d'envoyer vers le paiement — un dernier coup d'œil avant de risquer un
+remboursement, pas une garantie. La garantie réelle reste `create_sale_core`,
+sous verrou, au moment du paiement.
 
 ### Ce que le site web interroge
 
@@ -264,15 +287,11 @@ Il ne peut pas non plus appeler `scan_product` ni `create_sale`, qui exigent
 - `public.create_sale` est désormais un mince gardien : il vérifie `ventes.creer`
   (et `ventes.facturer` le cas échéant) puis délègue. Signature inchangée, donc
   droits conservés — la caisse et l'ERP n'ont rien à changer.
-- `web_hold_product`, `web_release`, `web_cart` rejouent la logique de
-  `scan_product` sans exiger de permission : c'est le `cart_ref` qui autorise. Son
-  format `WEB-<uuid>` est imposé côté SQL, pour qu'un visiteur ne puisse pas
-  présenter celui d'une caisse.
+- `web_hold_product`, `web_release`, `web_cart` gèrent le panier sans exiger de
+  permission : c'est le `cart_ref` qui autorise. Son format `WEB-<uuid>` est
+  imposé côté SQL, pour qu'un visiteur ne puisse pas présenter celui d'une caisse.
 - `web_confirm_paid` appelle le cœur directement, **sous clé service_role
   uniquement**, depuis le seul webhook Mollie.
-
-Une pièce mise au panier en ligne occupe donc le même `stock_holds` qu'un scan en
-caisse : l'un des deux est refusé, jamais les deux acceptés.
 
 Deux réglages accompagnent l'ouverture au public :
 
@@ -281,10 +300,11 @@ Deux réglages accompagnent l'ouverture au public :
   seule l'API admin peut poser. Sans lui, un inconnu pourrait déposer
   `camille@maison-piron.invalid` et bloquer la création de ce compte employé.
   `createStaffAccount` pose ce drapeau : ne pas le retirer.
-- le cron `/api/cron/holds` libère les réservations expirées toutes les quinze
-  minutes. En boutique seule, `release_expired_holds()` était appelée à chaque
-  scan ; un panier web abandonné à 23 h aurait sinon retenu sa pièce jusqu'au
-  premier scan du lendemain.
+- le cron `/api/cron/holds` libère les réservations boutique expirées toutes
+  les quinze minutes, pour le cas où la boutique est fermée et où personne ne
+  scanne plus pour déclencher `release_expired_holds()`. Il referme aussi les
+  commandes web dont le paiement a été abandonné plus de 30 minutes — un
+  simple panier, lui, n'a rien à expirer puisqu'il ne retient aucune pièce.
 
 ### Retours
 
