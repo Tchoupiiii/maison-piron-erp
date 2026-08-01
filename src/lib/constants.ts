@@ -1,11 +1,11 @@
 /** Mentions reprises telles quelles sur les factures (voir maquette, écran Ventes). */
 export const MAISON = {
   legalName: "Maison Piron SRL",
-  street: "Rue Hors-Château 42",
+  street: "Rue des Dominicains 3",
   postalCode: "4000",
   city: "Liège",
   country: "Belgique",
-  vatNumber: "BE 0788.412.335",
+  vatNumber: "BE 0419.392.663",
 } as const;
 
 export const VAT_RATE = 0.21;
