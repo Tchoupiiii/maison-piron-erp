@@ -1354,14 +1354,14 @@ export type Database = {
       web_enquiries: {
         Row: {
           created_at: string
-          email: string
+          email: string | null
           full_name: string
           handled_at: string | null
           handled_by: string | null
           handled_note: string | null
           id: string
           kind: Database["public"]["Enums"]["enquiry_kind"]
-          message: string
+          message: string | null
           phone: string | null
           product_id: string | null
           status: Database["public"]["Enums"]["enquiry_status"]
@@ -1369,14 +1369,14 @@ export type Database = {
         }
         Insert: {
           created_at?: string
-          email: string
+          email?: string | null
           full_name: string
           handled_at?: string | null
           handled_by?: string | null
           handled_note?: string | null
           id?: string
           kind?: Database["public"]["Enums"]["enquiry_kind"]
-          message: string
+          message?: string | null
           phone?: string | null
           product_id?: string | null
           status?: Database["public"]["Enums"]["enquiry_status"]
@@ -1384,14 +1384,14 @@ export type Database = {
         }
         Update: {
           created_at?: string
-          email?: string
+          email?: string | null
           full_name?: string
           handled_at?: string | null
           handled_by?: string | null
           handled_note?: string | null
           id?: string
           kind?: Database["public"]["Enums"]["enquiry_kind"]
-          message?: string
+          message?: string | null
           phone?: string | null
           product_id?: string | null
           status?: Database["public"]["Enums"]["enquiry_status"]
@@ -1577,6 +1577,56 @@ export type Database = {
           },
         ]
       }
+      wishlist_items: {
+        Row: {
+          created_at: string
+          customer_id: string
+          id: string
+          product_id: string
+        }
+        Insert: {
+          created_at?: string
+          customer_id: string
+          id?: string
+          product_id: string
+        }
+        Update: {
+          created_at?: string
+          customer_id?: string
+          id?: string
+          product_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wishlist_items_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wishlist_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "product_availability"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wishlist_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wishlist_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "web_catalogue"
+            referencedColumns: ["product_id"]
+          },
+        ]
+      }
     }
     Views: {
       product_availability: {
@@ -1757,6 +1807,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      anonymize_stale_web_enquiries: { Args: never; Returns: number }
       auth_email_for_username: {
         Args: { username_param: string }
         Returns: string
@@ -1773,6 +1824,15 @@ export type Database = {
           stone_cost: number
           ttc: number
         }[]
+      }
+      check_auth_rate_limit: {
+        Args: {
+          action_param: string
+          identifier_param: string
+          max_attempts_param: number
+          window_minutes_param: number
+        }
+        Returns: boolean
       }
       create_sale: {
         Args: {
@@ -1998,6 +2058,22 @@ export type Database = {
         }
         Returns: string
       }
+      wishlist_add: { Args: { slug_param: string }; Returns: string }
+      wishlist_list: {
+        Args: never
+        Returns: {
+          added_at: string
+          brand_name: string
+          is_available: boolean
+          is_published: boolean
+          name: string
+          price_ttc: number
+          product_id: string
+          slug: string
+          wishlist_id: string
+        }[]
+      }
+      wishlist_remove: { Args: { slug_param: string }; Returns: undefined }
     }
     Enums: {
       activity_action:
@@ -2035,6 +2111,7 @@ export type Database = {
         | "web_demande_recue"
         | "web_marque_modifiee"
         | "panier_libere"
+        | "web_enquiry_anonymisee"
       certificate_lab: "GIA" | "IGI" | "HRD" | "autre" | "aucun"
       contact_language: "fr" | "nl" | "en" | "de"
       enquiry_kind: "rendez_vous" | "question" | "estimation" | "autre"
@@ -2261,6 +2338,7 @@ export const Constants = {
         "web_demande_recue",
         "web_marque_modifiee",
         "panier_libere",
+        "web_enquiry_anonymisee",
       ],
       certificate_lab: ["GIA", "IGI", "HRD", "autre", "aucun"],
       contact_language: ["fr", "nl", "en", "de"],

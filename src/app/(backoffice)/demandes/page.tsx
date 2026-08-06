@@ -5,6 +5,7 @@ import { setEnquiryStatus, setEnquiryStatusForm } from "@/actions/web-orders";
 import { ActionButton } from "@/components/action-button";
 import { ActionForm } from "@/components/action-form";
 import { AccessRestricted } from "@/components/access-restricted";
+import { AnonymizeStaleEnquiriesButton } from "@/components/anonymize-stale-enquiries-button";
 import {
   Badge,
   Card,
@@ -88,7 +89,13 @@ export default async function DemandesPage({
 
   return (
     <>
-      <PageHeader breadcrumb={[maison.displayName, "Site web", "Demandes"]} title="Demandes" />
+      <PageHeader
+        breadcrumb={[maison.displayName, "Site web", "Demandes"]}
+        title="Demandes"
+        aside={
+          session.can(PERMISSIONS.clienteleRgpd) ? <AnonymizeStaleEnquiriesButton /> : undefined
+        }
+      />
 
       <Section>
         <StatRow
